@@ -161,3 +161,6 @@ h3 { font-size: .9rem; margin: 16px 0 8px; }
 @media (max-width: 400px) {
   .grid { grid-template-columns: 1fr; }
 }
+
+/* Teise inimese lao vaatamine: muutmise vormid ja nupud on peidetud */
+body.readonly :is(#part-form, #build-card, #order-form, #drone-form, .install-form, .row-actions, button[data-act], footer .button) { display: none !important; }

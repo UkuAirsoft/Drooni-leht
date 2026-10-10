@@ -16,7 +16,13 @@ function load() {
   return normalize({});
 }
 
+let readOnly = false; // teise inimese lao vaatamine
+
 function save() {
+  if (readOnly) {
+    render();
+    return;
+  }
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   render();
   if (window.cloudSave) window.cloudSave(state);
@@ -25,10 +31,18 @@ function save() {
 /* Pilve sünkroonimine (sync.js) loeb ja asendab andmeid nende kaudu */
 window.appState = {
   get: () => state,
-  replace(data) {
+  replace(data, persist = true) {
     state = normalize(data);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    if (persist) localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     render();
+  },
+  restoreLocal() {
+    state = load();
+    render();
+  },
+  setReadOnly(on) {
+    readOnly = on;
+    document.body.classList.toggle('readonly', on);
   },
 };
 

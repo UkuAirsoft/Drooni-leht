@@ -8,3 +8,9 @@ export const firebaseConfig = {
   messagingSenderId: '1081314026463',
   appId: '1:1081314026463:web:c881bba7d10444b1d11a6a',
 };
+
+// Kes kelle ladu näha tohib (ainult vaatamiseks). Kasuta väikeseid tähti.
+// Iga aadress peab olema ka firestore.rules failis lubatud aadresside nimekirjas.
+export const shares = {
+  'ukuprits@gmail.com': ['abcmetall@gmail.com'],
+};

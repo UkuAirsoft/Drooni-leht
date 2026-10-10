@@ -1,12 +1,18 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Ligi pääseb ainult omaniku Google'i konto ja ainult oma lao andmetele
+    // Kes üldse tohib pilve oma ladu hoida
+    function allowed() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email in ['ukuprits@gmail.com', 'abcmetall@gmail.com'];
+    }
+
     match /ladu/{userId} {
-      allow read, write: if request.auth != null
-        && request.auth.uid == userId
-        && request.auth.token.email == 'ukuprits@gmail.com'
-        && request.auth.token.email_verified == true;
+      // Oma ladu: lugeda ja muuta. Teise ladu: ainult lugeda, kui omanik on sind lubanud (viewers).
+      allow read: if allowed()
+        && (request.auth.uid == userId || request.auth.token.email in resource.data.viewers);
+      allow write: if allowed() && request.auth.uid == userId;
     }
   }
 }
