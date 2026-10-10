@@ -347,7 +347,8 @@ $('order-form').addEventListener('submit', (e) => {
   const editing = state.orders.find((o) => o.id === $('order-id').value);
   const order = {
     id: editing ? editing.id : uid(),
-    date: editing ? editing.date : new Date().toISOString(),
+    // kuupäev muutub, kui plaanitud asi märgitakse tellituks
+    date: editing && statusOf(editing) === $('order-status').value ? editing.date : new Date().toISOString(),
     name: $('order-name').value.trim(),
     category: comboValue('order-category'),
     supplier: comboValue('order-supplier'),
@@ -356,6 +357,7 @@ $('order-form').addEventListener('submit', (e) => {
     price: unitPrice('order'),
     note: $('order-note').value.trim(),
     link: $('order-link').value.trim(),
+    status: $('order-status').value,
   };
   if (!order.name) return;
   if (!(order.qty > 0)) {
@@ -370,7 +372,7 @@ $('order-form').addEventListener('submit', (e) => {
     Object.assign(editing, order);
   } else {
     state.orders.push(order);
-    addLog('Tellitud', null, order.qty, null, order.name);
+    addLog(order.status === 'planned' ? 'Plaanis osta' : 'Tellitud', null, order.qty, null, order.name);
     state.log[0].unit = order.unit;
   }
   resetOrderForm();
@@ -402,6 +404,17 @@ $('order-name').addEventListener('change', () => {
   updatePriceHint('order');
   if (!$('order-link').value) $('order-link').value = p.link || '';
 });
+
+const statusOf = (o) => o.status || 'ordered';
+
+function markOrdered(id) {
+  const order = state.orders.find((o) => o.id === id);
+  order.status = 'ordered';
+  order.date = new Date().toISOString();
+  addLog('Tellitud', null, order.qty, null, order.name);
+  state.log[0].unit = unitOf(order);
+  save();
+}
 
 function receiveOrder(id) {
   const order = state.orders.find((o) => o.id === id);
@@ -438,6 +451,7 @@ function editOrder(id) {
   $('order-price-mode').value = 'unit';
   $('order-note').value = o.note || '';
   $('order-link').value = o.link || '';
+  $('order-status').value = statusOf(o);
   updatePriceHint('order');
   $('order-form-title').textContent = 'Muuda tellimust';
   $('order-submit').textContent = 'Salvesta';
@@ -455,15 +469,18 @@ function deleteOrder(id) {
   save();
 }
 
-$('order-list').addEventListener('click', (e) => {
-  const btn = e.target.closest('button[data-act]');
-  if (!btn) return;
-  const id = btn.closest('tr').dataset.id;
-  if (btn.dataset.act !== 'edit' && $('order-id').value === id) resetOrderForm(); // muudetav tellimus kaob nimekirjast
-  if (btn.dataset.act === 'arrived') receiveOrder(id);
-  if (btn.dataset.act === 'edit') editOrder(id);
-  if (btn.dataset.act === 'del') deleteOrder(id);
-});
+for (const list of ['order-list', 'planned-list']) {
+  $(list).addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-act]');
+    if (!btn) return;
+    const id = btn.closest('tr').dataset.id;
+    if (btn.dataset.act !== 'edit' && $('order-id').value === id) resetOrderForm(); // muudetav tellimus muutub nimekirjas
+    if (btn.dataset.act === 'ordered') markOrdered(id);
+    if (btn.dataset.act === 'arrived') receiveOrder(id);
+    if (btn.dataset.act === 'edit') editOrder(id);
+    if (btn.dataset.act === 'del') deleteOrder(id);
+  });
+}
 
 /* ---------- Valmista toode osadest ---------- */
 const emptyBuildRow = () => ({ partId: '', qty: 1 });
@@ -779,7 +796,7 @@ function renderBuildSummary() {
 
 function renderOrders() {
   const fmt = new Intl.DateTimeFormat('et-EE', { dateStyle: 'short' });
-  $('order-list').innerHTML = state.orders.map((o) => `
+  const row = (o, mainButton) => `
     <tr data-id="${o.id}">
       <td class="muted">${fmt.format(new Date(o.date))}</td>
       <td>${esc(o.name)}</td>
@@ -789,15 +806,25 @@ function renderOrders() {
       <td class="muted">${esc(o.note)}</td>
       <td>${linkHtml(o.link)}</td>
       <td class="row-actions">
-        <button class="small primary" data-act="arrived">Kohal</button>
+        ${mainButton}
         <button class="small" data-act="edit">Muuda</button>
         <button class="small danger" data-act="del">Kustuta</button>
       </td>
-    </tr>`).join('');
-  const total = state.orders.reduce((s, o) => s + (o.price || 0) * o.qty, 0);
-  $('order-total').textContent = state.orders.length ? `${state.orders.length} tellimust teel${total ? ' · ' + money(total) : ''}` : '';
-  $('order-empty').hidden = state.orders.length > 0;
-  $('order-count').textContent = state.orders.length || '';
+    </tr>`;
+  const sum = (list) => list.reduce((s, o) => s + (o.price || 0) * o.qty, 0);
+
+  const ordered = state.orders.filter((o) => statusOf(o) === 'ordered');
+  $('order-list').innerHTML = ordered.map((o) => row(o, '<button class="small primary" data-act="arrived">Kohal</button>')).join('');
+  const total = sum(ordered);
+  $('order-total').textContent = ordered.length ? `${ordered.length} tellimust teel${total ? ' · ' + money(total) : ''}` : '';
+  $('order-empty').hidden = ordered.length > 0;
+  $('order-count').textContent = ordered.length || '';
+
+  const planned = state.orders.filter((o) => statusOf(o) === 'planned');
+  $('planned-list').innerHTML = planned.map((o) => row(o, '<button class="small primary" data-act="ordered">Tellisin</button>')).join('');
+  const plannedTotal = sum(planned);
+  $('planned-total').textContent = planned.length ? `${planned.length} asja${plannedTotal ? ' · ' + money(plannedTotal) : ''}` : '';
+  $('planned-empty').hidden = planned.length > 0;
 }
 
 function renderLog() {

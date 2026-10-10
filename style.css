@@ -164,3 +164,5 @@ h3 { font-size: .9rem; margin: 16px 0 8px; }
 
 /* Teise inimese lao vaatamine: muutmise vormid ja nupud on peidetud */
 body.readonly :is(#part-form, #build-card, #order-form, #drone-form, .install-form, .row-actions, button[data-act], footer .button) { display: none !important; }
+#planned-total:empty { display: none; }
+#planned-total { margin: 0 0 8px; }

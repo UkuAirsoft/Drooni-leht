@@ -159,6 +159,12 @@
           </label>
           <label>Märkus <input id="order-note" placeholder="nt. tellimuse nr"></label>
           <label>Ostulink <input id="order-link" type="url" placeholder="https://…"></label>
+          <label>Olek
+            <select id="order-status">
+              <option value="ordered">Tellitud (teel)</option>
+              <option value="planned">Plaanis osta</option>
+            </select>
+          </label>
         </div>
         <div class="actions">
           <button type="submit" class="primary" id="order-submit">Lisa tellimus</button>
@@ -167,6 +173,7 @@
       </form>
 
       <div class="card">
+        <h2>Teel</h2>
         <p id="order-total" class="muted"></p>
         <table>
           <thead>
@@ -175,6 +182,18 @@
           <tbody id="order-list"></tbody>
         </table>
         <p id="order-empty" class="empty">Teel olevaid tellimusi pole. Kui tellimus saabub, vajuta „Kohal“ ja see läheb lattu.</p>
+      </div>
+
+      <div class="card">
+        <h2>Plaanis osta</h2>
+        <p id="planned-total" class="muted"></p>
+        <table>
+          <thead>
+            <tr><th>Lisatud</th><th>Nimi</th><th>Tarnija</th><th class="num">Kogus</th><th class="num">Hind</th><th>Märkus</th><th>Ostulink</th><th></th></tr>
+          </thead>
+          <tbody id="planned-list"></tbody>
+        </table>
+        <p id="planned-empty" class="empty">Ostunimekiri on tühi. Vali vormis olekuks „Plaanis osta“. Kui oled tellinud, vajuta „Tellisin“.</p>
       </div>
       <datalist id="part-names"></datalist>
     </section>
