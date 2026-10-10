@@ -1,6 +1,10 @@
 const STORAGE_KEY = 'drooni-ladu-v1';
 const LOW_STOCK = 1; // tõsta esile read, kus laoseis on sellest väiksem või võrdne (kui detailil on hoiatus sees)
-const TOOL_CATEGORY = 'Tööriistad'; // selle kategooria asjad näidatakse laos eraldi nimekirjas
+// Nende kategooriate asjad näidatakse laos eraldi nimekirjas ja neid ei paigaldata droonile
+const SECTIONS = [
+  { key: 'tool', category: 'Tööriistad', match: /^tööriist/i },
+  { key: 'charger', category: 'Laadijad', match: /^laadija/i },
+];
 
 let state = load();
 
@@ -51,7 +55,8 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const partById = (id) => state.parts.find((p) => p.id === id);
 const droneById = (id) => state.drones.find((d) => d.id === id);
-const isTool = (p) => /^tööriist/i.test((p.category || '').trim());
+const sectionOf = (p) => SECTIONS.find((s) => s.match.test((p.category || '').trim()));
+const isSeparate = (p) => !!sectionOf(p);
 
 /* Ühikud: tükid või meetrid. Meetrite puhul võib kogus olla murdarv. */
 const unitOf = (p) => p.unit || 'tk';
@@ -245,7 +250,7 @@ function deletePart(id) {
   save();
 }
 
-for (const list of ['part-list', 'tool-list']) {
+for (const list of ['part-list', ...SECTIONS.map((s) => s.key + '-list')]) {
   $(list).addEventListener('click', (e) => {
     const btn = e.target.closest('button[data-act]');
     if (!btn) return;
@@ -611,7 +616,9 @@ function render() {
 function renderCategories() {
   const unique = (key) => [...new Set(state.parts.map((p) => p[key]).filter(Boolean))].sort((a, b) => a.localeCompare(b));
   const cats = unique('category');
-  if (!cats.some((c) => isTool({ category: c }))) cats.push(TOOL_CATEGORY);
+  for (const sec of SECTIONS) {
+    if (!cats.some((c) => sec.match.test(c))) cats.push(sec.category);
+  }
   fillCombo('part-category', cats);
   const suppliers = [...new Set([...unique('supplier'), ...state.orders.map((o) => o.supplier).filter(Boolean)])].sort((a, b) => a.localeCompare(b));
   fillCombo('part-supplier', suppliers);
@@ -650,8 +657,7 @@ function renderParts() {
     .filter((p) => showHidden || !isHidden(p))
     .filter((p) => (!cat || p.category === cat) && (!q || `${p.name} ${p.category} ${p.supplier || ''} ${p.note}`.toLowerCase().includes(q)))
     .sort((a, b) => (a.category || '').localeCompare(b.category || '') || a.name.localeCompare(b.name));
-  const parts = rows.filter((p) => !isTool(p));
-  const tools = rows.filter(isTool);
+  const parts = rows.filter((p) => !isSeparate(p));
 
   const actions = `
       <td class="row-actions">
@@ -672,9 +678,11 @@ function renderParts() {
       <td class="muted">${esc(p.note)}</td>
       <td>${linkHtml(p.link)}</td>${actions}
     </tr>`).join('');
-  $('part-empty').hidden = state.parts.some((p) => !isTool(p));
+  $('part-empty').hidden = state.parts.some((p) => !isSeparate(p));
 
-  $('tool-list').innerHTML = tools.map((p) => `
+  for (const sec of SECTIONS) {
+    const items = rows.filter((p) => sectionOf(p) === sec);
+    $(sec.key + '-list').innerHTML = items.map((p) => `
     <tr data-id="${p.id}">
       <td>${esc(p.name)}</td>
       <td class="num">${fmtQty(p.qty, unitOf(p))}</td>
@@ -683,11 +691,12 @@ function renderParts() {
       <td class="muted">${esc(p.note)}</td>
       <td>${linkHtml(p.link)}</td>${actions}
     </tr>`).join('');
-  $('tool-card').hidden = tools.length === 0;
+    $(sec.key + '-card').hidden = items.length === 0;
+  }
 }
 
 function renderDrones() {
-  const available = state.parts.filter((p) => p.qty > 0 && !isTool(p)).sort((a, b) => a.name.localeCompare(b.name));
+  const available = state.parts.filter((p) => p.qty > 0 && !isSeparate(p)).sort((a, b) => a.name.localeCompare(b.name));
   const options = available.map((p) => `<option value="${p.id}">${esc(p.name)} (laos ${fmtQty(p.qty, unitOf(p))})</option>`).join('');
 
   $('drone-list').innerHTML = state.drones.map((d) => {
@@ -733,7 +742,7 @@ function renderDrones() {
 }
 
 function renderBuild() {
-  const options = state.parts.filter((p) => !isTool(p)).sort((a, b) => a.name.localeCompare(b.name));
+  const options = state.parts.filter((p) => !isSeparate(p)).sort((a, b) => a.name.localeCompare(b.name));
   $('build-parts').innerHTML = buildRows.map((r, i) => {
     const p = partById(r.partId);
     return `
