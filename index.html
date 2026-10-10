@@ -116,7 +116,8 @@
     <!-- TELLITUD -->
     <section id="tellitud" class="panel">
       <form id="order-form" class="card">
-        <h2>Lisa tellimus</h2>
+        <h2 id="order-form-title">Lisa tellimus</h2>
+        <input type="hidden" id="order-id">
         <div class="grid">
           <label>Nimi <input id="order-name" list="part-names" required placeholder="nt. 2306 mootor"></label>
           <label>Kategooria
@@ -149,7 +150,10 @@
           <label>Märkus <input id="order-note" placeholder="nt. tellimuse nr"></label>
           <label>Ostulink <input id="order-link" type="url" placeholder="https://…"></label>
         </div>
-        <div class="actions"><button type="submit" class="primary">Lisa tellimus</button></div>
+        <div class="actions">
+          <button type="submit" class="primary" id="order-submit">Lisa tellimus</button>
+          <button type="button" id="order-cancel" hidden>Tühista</button>
+        </div>
       </form>
 
       <div class="card">

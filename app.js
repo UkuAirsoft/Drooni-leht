@@ -339,9 +339,10 @@ $('drone-list').addEventListener('click', (e) => {
 /* ---------- Tellimused ---------- */
 $('order-form').addEventListener('submit', (e) => {
   e.preventDefault();
+  const editing = state.orders.find((o) => o.id === $('order-id').value);
   const order = {
-    id: uid(),
-    date: new Date().toISOString(),
+    id: editing ? editing.id : uid(),
+    date: editing ? editing.date : new Date().toISOString(),
     name: $('order-name').value.trim(),
     category: comboValue('order-category'),
     supplier: comboValue('order-supplier'),
@@ -360,16 +361,26 @@ $('order-form').addEventListener('submit', (e) => {
     alert('Koguse hinna jaoks peab kogus olema suurem kui 0.');
     return;
   }
-  state.orders.push(order);
-  addLog('Tellitud', null, order.qty, null, order.name);
-  state.log[0].unit = order.unit;
+  if (editing) {
+    Object.assign(editing, order);
+  } else {
+    state.orders.push(order);
+    addLog('Tellitud', null, order.qty, null, order.name);
+    state.log[0].unit = order.unit;
+  }
   resetOrderForm();
   save();
 });
 
+$('order-cancel').addEventListener('click', resetOrderForm);
+
 function resetOrderForm() {
   $('order-form').reset();
+  $('order-id').value = '';
   $('order-qty').value = 1;
+  $('order-form-title').textContent = 'Lisa tellimus';
+  $('order-submit').textContent = 'Lisa tellimus';
+  $('order-cancel').hidden = true;
   setCombo('order-category', '');
   setCombo('order-supplier', '');
   updatePriceHint('order');
@@ -410,6 +421,26 @@ function receiveOrder(id) {
   save();
 }
 
+function editOrder(id) {
+  const o = state.orders.find((x) => x.id === id);
+  $('order-id').value = o.id;
+  $('order-name').value = o.name;
+  setCombo('order-category', o.category || '');
+  setCombo('order-supplier', o.supplier || '');
+  $('order-qty').value = o.qty;
+  $('order-unit').value = unitOf(o);
+  $('order-price').value = o.price == null ? '' : Math.round(o.price * 100) / 100;
+  $('order-price-mode').value = 'unit';
+  $('order-note').value = o.note || '';
+  $('order-link').value = o.link || '';
+  updatePriceHint('order');
+  $('order-form-title').textContent = 'Muuda tellimust';
+  $('order-submit').textContent = 'Salvesta';
+  $('order-cancel').hidden = false;
+  $('order-form').scrollIntoView({ behavior: 'smooth' });
+  $('order-name').focus();
+}
+
 function deleteOrder(id) {
   const order = state.orders.find((o) => o.id === id);
   if (!confirm(`Kustutada tellimus "${order.name}"?`)) return;
@@ -423,7 +454,9 @@ $('order-list').addEventListener('click', (e) => {
   const btn = e.target.closest('button[data-act]');
   if (!btn) return;
   const id = btn.closest('tr').dataset.id;
+  if (btn.dataset.act !== 'edit' && $('order-id').value === id) resetOrderForm(); // muudetav tellimus kaob nimekirjast
   if (btn.dataset.act === 'arrived') receiveOrder(id);
+  if (btn.dataset.act === 'edit') editOrder(id);
   if (btn.dataset.act === 'del') deleteOrder(id);
 });
 
@@ -748,6 +781,7 @@ function renderOrders() {
       <td>${linkHtml(o.link)}</td>
       <td class="row-actions">
         <button class="small primary" data-act="arrived">Kohal</button>
+        <button class="small" data-act="edit">Muuda</button>
         <button class="small danger" data-act="del">Kustuta</button>
       </td>
     </tr>`).join('');
