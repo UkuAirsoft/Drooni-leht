@@ -3,16 +3,17 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Drooni ladu</title>
+  <title>Kodu ladu</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <header>
-    <h1>Drooni ladu</h1>
+    <h1>Kodu ladu</h1>
     <nav>
       <button class="tab active" data-tab="ladu">Ladu</button>
       <button class="tab" data-tab="tellitud">Tellitud <span id="order-count" class="badge"></span></button>
       <button class="tab" data-tab="droonid">Droonid</button>
+      <button class="tab" data-tab="printer">3D printer</button>
       <button class="tab" data-tab="ajalugu">Ajalugu</button>
     </nav>
     <div class="sync">
@@ -212,11 +213,87 @@
       <p id="drone-empty" class="empty">Droone pole veel lisatud.</p>
     </section>
 
+    <!-- 3D PRINTER -->
+    <section id="printer" class="panel">
+      <details class="card" id="printer-form-card">
+        <summary><h2 id="printer-form-title">Lisa printer</h2></summary>
+        <form id="printer-form">
+          <input type="hidden" id="printer-id">
+          <div class="grid">
+            <label>Nimi <input id="printer-name" required placeholder="nt. Töökoja printer"></label>
+            <label>Mudel <input id="printer-model" value="Bambu Lab P2S"></label>
+            <label>Düüs (mm)
+              <select id="printer-nozzle">
+                <option>0.2</option><option selected>0.4</option><option>0.6</option><option>0.8</option>
+              </select>
+            </label>
+            <label>AMS-ide arv
+              <select id="printer-ams">
+                <option value="0">0</option><option value="1" selected>1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option>
+              </select>
+            </label>
+            <label>Märkus <input id="printer-note" placeholder="nt. ostetud 2026, seerianumber"></label>
+          </div>
+          <div class="actions">
+            <button type="submit" class="primary" id="printer-submit">Lisa printer</button>
+            <button type="button" id="printer-cancel" hidden>Tühista</button>
+          </div>
+        </form>
+      </details>
+
+      <div id="printer-list"></div>
+
+      <details class="card" id="fil-form-card">
+        <summary><h2 id="fil-form-title">Lisa filament lattu</h2></summary>
+        <form id="fil-form">
+          <input type="hidden" id="fil-id">
+          <div class="grid">
+            <label>Materjal <input id="fil-material" list="fil-materials" required placeholder="nt. PLA Basic"></label>
+            <label>Värv
+              <span class="input-row">
+                <input id="fil-hex" type="color" value="#ffffff" class="color-input" title="Vali värv">
+                <input id="fil-color" placeholder="nt. Valge">
+              </span>
+            </label>
+            <label>Tootja <input id="fil-brand" list="fil-brands" placeholder="nt. Bambu Lab"></label>
+            <label>Rulle <input id="fil-count" type="number" min="0" step="1" value="1" required></label>
+            <label>Kaal rullil (g) <input id="fil-weight" type="number" min="0" step="1" value="1000"></label>
+            <label>Hind rulli kohta (€) <input id="fil-price" type="number" min="0" step="0.01" placeholder="0.00"></label>
+            <label>Märkus <input id="fil-note" placeholder="nt. kuivatatud"></label>
+            <label>Ostulink <input id="fil-link" type="url" placeholder="https://…"></label>
+          </div>
+          <div class="actions">
+            <button type="submit" class="primary" id="fil-submit">Lisa lattu</button>
+            <button type="button" id="fil-cancel" hidden>Tühista</button>
+          </div>
+        </form>
+      </details>
+
+      <div class="card">
+        <h2>Filament laos</h2>
+        <p id="fil-total" class="muted"></p>
+        <table>
+          <thead>
+            <tr><th>Värv</th><th>Materjal</th><th>Tootja</th><th class="num">Rulle</th><th class="num">Kaal</th><th class="num">Hind/rull</th><th>Märkus</th><th>Ostulink</th><th></th></tr>
+          </thead>
+          <tbody id="fil-list"></tbody>
+        </table>
+        <p id="fil-empty" class="empty">Filamenti pole laos. Lisa see üleval.</p>
+      </div>
+
+      <datalist id="fil-materials">
+        <option value="PLA Basic"><option value="PLA Matte"><option value="PLA Silk"><option value="PLA-CF">
+        <option value="PETG HF"><option value="PETG-CF"><option value="ABS"><option value="ASA">
+        <option value="TPU 95A"><option value="PA6-CF"><option value="PC"><option value="Support for PLA">
+      </datalist>
+      <datalist id="fil-brands"></datalist>
+    </section>
+
     <!-- AJALUGU -->
     <section id="ajalugu" class="panel">
       <div class="card">
         <table>
-          <thead><tr><th>Aeg</th><th>Tegevus</th><th>Detail</th><th class="num">Kogus</th><th>Droon</th></tr></thead>
+          <thead><tr><th>Aeg</th><th>Tegevus</th><th>Detail</th><th class="num">Kogus</th><th>Droon / printer</th></tr></thead>
           <tbody id="log-list"></tbody>
         </table>
         <p id="log-empty" class="empty">Ajalugu on tühi.</p>

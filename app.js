@@ -9,7 +9,7 @@ const SECTIONS = [
 let state = load();
 
 function normalize(data) {
-  return { parts: [], drones: [], orders: [], recipes: {}, log: [], ...data };
+  return { parts: [], drones: [], orders: [], recipes: {}, printers: [], filaments: [], log: [], ...data };
 }
 
 function load() {
@@ -594,12 +594,243 @@ $('build-form').addEventListener('submit', (e) => {
   save();
 });
 
+/* ---------- 3D printer ja filament ---------- */
+const SLOT_LETTERS = 'ABCD';
+const LOW_FILAMENT = 100; // g – AMS-i pesas olev rull muutub punaseks, kui alles on vähem
+const safeHex = (h) => (/^#[0-9a-f]{6}$/i.test(h || '') ? h : '#cccccc');
+const filLabel = (f) => [f.material, f.color].filter(Boolean).join(' ') + (f.brand ? ` (${f.brand})` : '');
+const printerById = (id) => state.printers.find((p) => p.id === id);
+const filById = (id) => state.filaments.find((f) => f.id === id);
+
+function filLog(type, f, qty, where) {
+  addLog(type, null, qty, null, filLabel(f));
+  state.log[0].unit = 'rull';
+  if (where) state.log[0].droneName = where;
+}
+
+/* Printeri pesade nimed: A1–A4 iga AMS-i kohta (A, B, C, D) ja väline rull */
+function slotKeys(pr) {
+  const keys = [];
+  for (let u = 0; u < pr.ams; u++) for (let k = 1; k <= 4; k++) keys.push(SLOT_LETTERS[u] + k);
+  return [...keys, 'ext'];
+}
+const slotName = (key) => (key === 'ext' ? 'Väline rull' : key);
+
+// Printer
+$('printer-form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const fields = {
+    name: $('printer-name').value.trim(),
+    model: $('printer-model').value.trim(),
+    nozzle: $('printer-nozzle').value,
+    ams: parseInt($('printer-ams').value, 10) || 0,
+    note: $('printer-note').value.trim(),
+  };
+  if (!fields.name) return;
+  const pr = printerById($('printer-id').value);
+  if (pr) {
+    Object.assign(pr, fields);
+    // pesad, mida enam pole (vähem AMS-e), tagastatakse lattu
+    const keep = slotKeys(pr);
+    for (const key of Object.keys(pr.slots)) {
+      if (!keep.includes(key)) unloadSpool(pr, key);
+    }
+  } else {
+    state.printers.push({ id: uid(), ...fields, slots: {} });
+  }
+  resetPrinterForm();
+  $('printer-form-card').open = false;
+  save();
+});
+
+$('printer-cancel').addEventListener('click', () => {
+  resetPrinterForm();
+  $('printer-form-card').open = false;
+});
+
+function resetPrinterForm() {
+  $('printer-form').reset();
+  $('printer-id').value = '';
+  $('printer-form-title').textContent = 'Lisa printer';
+  $('printer-submit').textContent = 'Lisa printer';
+  $('printer-cancel').hidden = true;
+}
+
+function editPrinter(id) {
+  const pr = printerById(id);
+  $('printer-id').value = pr.id;
+  $('printer-name').value = pr.name;
+  $('printer-model').value = pr.model || '';
+  $('printer-nozzle').value = pr.nozzle || '0.4';
+  $('printer-ams').value = String(pr.ams);
+  $('printer-note').value = pr.note || '';
+  $('printer-form-title').textContent = 'Muuda printerit';
+  $('printer-submit').textContent = 'Salvesta';
+  $('printer-cancel').hidden = false;
+  $('printer-form-card').open = true;
+  $('printer-form-card').scrollIntoView({ behavior: 'smooth' });
+}
+
+function deletePrinter(id) {
+  const pr = printerById(id);
+  const loaded = Object.keys(pr.slots).length;
+  if (!confirm(`Kustutada printer "${pr.name}"?${loaded ? ' Rullid pesadest tagastatakse lattu.' : ''}`)) return;
+  for (const key of Object.keys(pr.slots)) unloadSpool(pr, key);
+  state.printers = state.printers.filter((p) => p.id !== id);
+  save();
+}
+
+// Rull laost pessa ja tagasi
+function loadSpool(pr, key, filId) {
+  const f = filById(filId);
+  if (!f || f.count < 1 || pr.slots[key]) return;
+  f.count -= 1;
+  pr.slots[key] = {
+    material: f.material, color: f.color, hex: f.hex, brand: f.brand,
+    weight: f.weight, full: f.weight, price: f.price, link: f.link,
+  };
+  filLog('Pandud printerisse', f, 1, `${pr.name} · ${slotName(key)}`);
+}
+
+/* Täis rull läheb tagasi sama rea juurde, poolik rull eraldi reale "avatud rull" */
+function unloadSpool(pr, key) {
+  const s = pr.slots[key];
+  if (!s) return;
+  const same = state.filaments.find((f) => f.material === s.material && f.color === s.color
+    && f.brand === s.brand && f.hex === s.hex && f.weight === s.weight);
+  if (same) {
+    same.count += 1;
+  } else {
+    state.filaments.push({
+      id: uid(), material: s.material, color: s.color, hex: s.hex, brand: s.brand,
+      count: 1, weight: s.weight, price: s.price, link: s.link || '',
+      note: s.weight < s.full ? 'avatud rull' : '',
+    });
+  }
+  delete pr.slots[key];
+  filLog('Võetud printerist lattu', s, 1, `${pr.name} · ${slotName(key)}`);
+}
+
+function emptySpool(pr, key) {
+  const s = pr.slots[key];
+  if (!confirm(`Kas rull "${filLabel(s)}" on otsas? See eemaldatakse pesast.`)) return;
+  delete pr.slots[key];
+  filLog('Filament otsas', s, 1, `${pr.name} · ${slotName(key)}`);
+  save();
+}
+
+$('printer-list').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-act]');
+  if (!btn) return;
+  const pr = printerById(btn.closest('[data-printer]').dataset.printer);
+  const key = btn.closest('[data-slot]')?.dataset.slot;
+  if (btn.dataset.act === 'edit-printer') editPrinter(pr.id);
+  if (btn.dataset.act === 'del-printer') deletePrinter(pr.id);
+  if (btn.dataset.act === 'unload') {
+    unloadSpool(pr, key);
+    save();
+  }
+  if (btn.dataset.act === 'empty') emptySpool(pr, key);
+});
+
+$('printer-list').addEventListener('change', (e) => {
+  const pr = printerById(e.target.closest('[data-printer]')?.dataset.printer);
+  const key = e.target.closest('[data-slot]')?.dataset.slot;
+  if (!pr || !key) return;
+  if (e.target.classList.contains('slot-load') && e.target.value) {
+    loadSpool(pr, key, e.target.value);
+    save();
+  }
+  if (e.target.classList.contains('slot-weight') && pr.slots[key]) {
+    pr.slots[key].weight = Math.max(0, Math.round(parseFloat(e.target.value) || 0));
+    save();
+  }
+});
+
+// Filament laos
+$('fil-form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const fields = {
+    material: $('fil-material').value.trim(),
+    color: $('fil-color').value.trim(),
+    hex: $('fil-hex').value,
+    brand: $('fil-brand').value.trim(),
+    count: Math.max(0, parseInt($('fil-count').value, 10) || 0),
+    weight: Math.max(0, Math.round(parseFloat($('fil-weight').value) || 0)),
+    price: $('fil-price').value === '' ? null : Math.max(0, parseFloat($('fil-price').value) || 0),
+    note: $('fil-note').value.trim(),
+    link: $('fil-link').value.trim(),
+  };
+  if (!fields.material) return;
+  const f = filById($('fil-id').value);
+  if (f) {
+    Object.assign(f, fields);
+  } else {
+    const fil = { id: uid(), ...fields };
+    state.filaments.push(fil);
+    filLog('Filament lisatud', fil, fil.count);
+  }
+  resetFilForm();
+  $('fil-form-card').open = false;
+  save();
+});
+
+$('fil-cancel').addEventListener('click', () => {
+  resetFilForm();
+  $('fil-form-card').open = false;
+});
+
+function resetFilForm() {
+  $('fil-form').reset();
+  $('fil-id').value = '';
+  $('fil-form-title').textContent = 'Lisa filament lattu';
+  $('fil-submit').textContent = 'Lisa lattu';
+  $('fil-cancel').hidden = true;
+}
+
+function editFil(id) {
+  const f = filById(id);
+  $('fil-id').value = f.id;
+  $('fil-material').value = f.material;
+  $('fil-color').value = f.color || '';
+  $('fil-hex').value = safeHex(f.hex);
+  $('fil-brand').value = f.brand || '';
+  $('fil-count').value = f.count;
+  $('fil-weight').value = f.weight;
+  $('fil-price').value = f.price ?? '';
+  $('fil-note').value = f.note || '';
+  $('fil-link').value = f.link || '';
+  $('fil-form-title').textContent = 'Muuda filamenti';
+  $('fil-submit').textContent = 'Salvesta';
+  $('fil-cancel').hidden = false;
+  $('fil-form-card').open = true;
+  $('fil-form-card').scrollIntoView({ behavior: 'smooth' });
+}
+
+$('fil-list').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-act]');
+  if (!btn) return;
+  const f = filById(btn.closest('tr').dataset.id);
+  if (btn.dataset.act === 'plus' || btn.dataset.act === 'minus') {
+    const delta = btn.dataset.act === 'plus' ? 1 : -1;
+    if (f.count + delta < 0) return;
+    f.count += delta;
+    filLog(delta > 0 ? 'Filament lisatud' : 'Filament eemaldatud', f, 1);
+    save();
+  }
+  if (btn.dataset.act === 'edit') editFil(f.id);
+  if (btn.dataset.act === 'del' && confirm(`Kustutada "${filLabel(f)}" laost?`)) {
+    state.filaments = state.filaments.filter((x) => x.id !== f.id);
+    save();
+  }
+});
+
 /* ---------- Varukoopia ---------- */
 $('export-btn').addEventListener('click', () => {
   const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `drooni-ladu-${new Date().toISOString().slice(0, 10)}.json`;
+  a.download = `kodu-ladu-${new Date().toISOString().slice(0, 10)}.json`;
   a.click();
   URL.revokeObjectURL(a.href);
 });
@@ -611,7 +842,7 @@ $('import-file').addEventListener('change', async (e) => {
     const data = JSON.parse(await file.text());
     if (!Array.isArray(data.parts) || !Array.isArray(data.drones)) throw new Error();
     if (!confirm('See asendab praegused andmed varukoopiaga. Jätkata?')) return;
-    state = { parts: data.parts, drones: data.drones, orders: data.orders || [], recipes: data.recipes || {}, log: data.log || [] };
+    state = normalize(data);
     save();
   } catch {
     alert('Fail ei ole korrektne varukoopia.');
@@ -627,6 +858,7 @@ function render() {
   renderDrones();
   renderOrders();
   renderBuild();
+  renderPrinters();
   renderLog();
 }
 
@@ -794,6 +1026,87 @@ function renderBuildSummary() {
     + (short.length ? `<span class="warn-text">${cost ? ' · ' : ''}Laos pole piisavalt: ${short.map(esc).join(', ')}</span>` : '');
 }
 
+function renderPrinters() {
+  const stock = state.filaments.filter((f) => f.count > 0)
+    .sort((a, b) => filLabel(a).localeCompare(filLabel(b)));
+  const stockOptions = stock.map((f) => `<option value="${f.id}">${esc(filLabel(f))} · ${f.weight} g (${f.count} rulli)</option>`).join('');
+
+  const slotHtml = (pr, key) => {
+    const s = pr.slots[key];
+    if (!s) {
+      return `
+        <div class="slot empty-slot" data-slot="${key}">
+          <div class="slot-label">${slotName(key)}</div>
+          <div class="muted">Tühi</div>
+          <select class="slot-load" ${stock.length ? '' : 'disabled'}>
+            <option value="">${stock.length ? 'Pane rull…' : 'Laos pole filamenti'}</option>${stockOptions}
+          </select>
+        </div>`;
+    }
+    return `
+      <div class="slot ${s.weight < LOW_FILAMENT ? 'slot-low' : ''}" data-slot="${key}">
+        <div class="slot-label">${slotName(key)}</div>
+        <div class="slot-fil"><span class="swatch" style="background:${safeHex(s.hex)}"></span><strong>${esc(s.material)}</strong></div>
+        <div class="muted">${esc([s.color, s.brand].filter(Boolean).join(' · '))}</div>
+        <label class="slot-g"><input class="slot-weight" type="number" min="0" step="1" value="${s.weight}" title="Alles grammides"> g alles</label>
+        <div class="slot-actions">
+          <button type="button" class="small" data-act="unload">Lattu</button>
+          <button type="button" class="small danger" data-act="empty">Otsas</button>
+        </div>
+      </div>`;
+  };
+
+  $('printer-list').innerHTML = state.printers.map((pr) => {
+    const units = [];
+    for (let u = 0; u < pr.ams; u++) {
+      const keys = [1, 2, 3, 4].map((k) => SLOT_LETTERS[u] + k);
+      units.push(`<div class="ams"><h3>AMS ${u + 1}</h3><div class="slots">${keys.map((k) => slotHtml(pr, k)).join('')}</div></div>`);
+    }
+    units.push(`<div class="ams ams-ext"><h3>Väline rull</h3><div class="slots">${slotHtml(pr, 'ext')}</div></div>`);
+    const info = [pr.model, pr.nozzle ? `düüs ${pr.nozzle} mm` : '', pr.note].filter(Boolean).map(esc).join(' · ');
+    return `
+    <div class="card" data-printer="${pr.id}">
+      <div class="drone-head">
+        <div>
+          <h2>${esc(pr.name)}</h2>
+          <div class="muted">${info}</div>
+        </div>
+        <div class="row-actions">
+          <button class="small" data-act="edit-printer">Muuda</button>
+          <button class="small danger" data-act="del-printer">Kustuta</button>
+        </div>
+      </div>
+      ${units.join('')}
+    </div>`;
+  }).join('');
+
+  const fils = [...state.filaments].sort((a, b) => filLabel(a).localeCompare(filLabel(b)));
+  $('fil-list').innerHTML = fils.map((f) => `
+    <tr data-id="${f.id}" class="${f.count < 1 ? 'low' : ''}">
+      <td><span class="swatch" style="background:${safeHex(f.hex)}" title="${esc(f.color)}"></span> ${esc(f.color)}</td>
+      <td>${esc(f.material)}</td>
+      <td>${esc(f.brand)}</td>
+      <td class="num">${f.count}</td>
+      <td class="num">${f.weight} g</td>
+      <td class="num">${money(f.price)}</td>
+      <td class="muted">${esc(f.note)}</td>
+      <td>${linkHtml(f.link)}</td>
+      <td class="row-actions">
+        <button class="small" data-act="minus" title="Vähenda">−</button>
+        <button class="small" data-act="plus" title="Suurenda">+</button>
+        <button class="small" data-act="edit">Muuda</button>
+        <button class="small danger" data-act="del">Kustuta</button>
+      </td>
+    </tr>`).join('');
+  const rolls = fils.reduce((s, f) => s + f.count, 0);
+  const kg = fils.reduce((s, f) => s + f.count * f.weight, 0) / 1000;
+  const value = fils.reduce((s, f) => s + f.count * (f.price || 0), 0);
+  $('fil-total').textContent = fils.length ? `${rolls} rulli · ${qtyFmt.format(kg)} kg${value ? ' · ' + money(value) : ''}` : '';
+  $('fil-empty').hidden = fils.length > 0;
+  $('fil-brands').innerHTML = [...new Set(state.filaments.map((f) => f.brand).filter(Boolean))]
+    .map((b) => `<option value="${esc(b)}">`).join('');
+}
+
 function renderOrders() {
   const fmt = new Intl.DateTimeFormat('et-EE', { dateStyle: 'short' });
   const row = (o, mainButton) => `
@@ -841,3 +1154,4 @@ function renderLog() {
 }
 
 render();
+$('printer-form-card').open = state.printers.length === 0;

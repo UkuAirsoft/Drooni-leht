@@ -166,3 +166,27 @@ h3 { font-size: .9rem; margin: 16px 0 8px; }
 body.readonly :is(#part-form, #build-card, #order-form, #drone-form, .install-form, .row-actions, button[data-act], footer .button) { display: none !important; }
 #planned-total:empty { display: none; }
 #planned-total { margin: 0 0 8px; }
+
+/* 3D printer */
+#printer-form-card summary, #fil-form-card summary { cursor: pointer; list-style: none; }
+#printer-form-card summary::-webkit-details-marker, #fil-form-card summary::-webkit-details-marker { display: none; }
+#printer-form-card summary h2, #fil-form-card summary h2 { display: inline; margin: 0; }
+#printer-form-card summary::before, #fil-form-card summary::before { content: "▸ "; color: var(--muted); }
+#printer-form-card[open] summary::before, #fil-form-card[open] summary::before { content: "▾ "; }
+#printer-form-card[open] summary, #fil-form-card[open] summary { margin-bottom: 12px; }
+.ams { margin-top: 12px; }
+.ams h3 { margin: 0 0 8px; }
+.slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.slot { border: 1px solid var(--border); border-radius: 8px; padding: 8px; display: flex; flex-direction: column; gap: 4px; background: var(--bg); }
+.slot.empty-slot { border-style: dashed; }
+.slot.slot-low { border-color: var(--danger); }
+.slot-label { font-weight: 700; font-size: .8rem; color: var(--muted); }
+.slot-fil { display: flex; align-items: center; gap: 6px; }
+.slot-g { flex-direction: row; align-items: center; gap: 4px; }
+.slot-g input { width: 80px; padding: 3px 6px; }
+.slot-actions { display: flex; gap: 4px; }
+.slot select { width: 100%; }
+.swatch { display: inline-block; width: 16px; height: 16px; border-radius: 50%; border: 1px solid var(--border); vertical-align: middle; flex: none; }
+.color-input { width: 44px; min-width: 44px; padding: 2px; flex: none !important; height: auto; }
+body.readonly :is(#printer-form-card, #fil-form-card, .slot-load) { display: none !important; }
+body.readonly .slot-g input { pointer-events: none; border-color: transparent; background: transparent; }
