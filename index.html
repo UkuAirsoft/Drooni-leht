@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="et">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Drooni ladu</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>Drooni ladu</h1>
+    <nav>
+      <button class="tab active" data-tab="ladu">Ladu</button>
+      <button class="tab" data-tab="tellitud">Tellitud <span id="order-count" class="badge"></span></button>
+      <button class="tab" data-tab="droonid">Droonid</button>
+      <button class="tab" data-tab="ajalugu">Ajalugu</button>
+    </nav>
+    <div class="sync">
+      <span id="sync-status" class="hint"></span>
+      <button id="auth-btn" class="small" hidden>Logi sisse</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- LADU -->
+    <section id="ladu" class="panel active">
+      <form id="part-form" class="card">
+        <h2 id="part-form-title">Lisa detail</h2>
+        <input type="hidden" id="part-id">
+        <div class="grid">
+          <label>Nimi <input id="part-name" required placeholder="nt. 2306 mootor"></label>
+          <label>Kategooria
+            <select id="part-category-select" class="combo" data-input="part-category"></select>
+            <input id="part-category" placeholder="Uus kategooria, nt. Mootorid" hidden>
+          </label>
+          <label>Tarnija
+            <select id="part-supplier-select" class="combo" data-input="part-supplier"></select>
+            <input id="part-supplier" placeholder="Uus tarnija, nt. AliExpress" hidden>
+          </label>
+          <label>Kogus
+            <span class="input-row">
+              <input id="part-qty" type="number" min="0" step="any" value="1" required>
+              <select id="part-unit" title="Ühik">
+                <option value="tk">tk</option>
+                <option value="m">m</option>
+              </select>
+            </span>
+          </label>
+          <label>Hind (€)
+            <span class="input-row">
+              <input id="part-price" type="number" min="0" step="0.01" placeholder="0.00">
+              <select id="part-price-mode" title="Kas hind on ühe tüki või kogu koguse eest">
+                <option value="unit">tk</option>
+                <option value="total">kokku</option>
+              </select>
+            </span>
+            <span id="part-price-hint" class="muted"></span>
+          </label>
+          <label>Märkus <input id="part-note" placeholder="nt. tellimuse nr"></label>
+          <label>Ostulink <input id="part-link" type="url" placeholder="https://…"></label>
+          <label class="check"><input id="part-warn" type="checkbox" checked> Laoseisu hoiatus</label>
+        </div>
+        <div class="actions">
+          <button type="submit" class="primary" id="part-submit">Lisa lattu</button>
+          <button type="button" id="part-cancel" hidden>Tühista</button>
+        </div>
+      </form>
+
+      <details class="card" id="build-card">
+        <summary><h2>Valmista toode osadest</h2></summary>
+        <p class="muted">Näiteks aku: vali osad ja mitu tükki ühe toote jaoks kulub. Osad võetakse laost maha ja valmis toode lisatakse lattu. Retsept jäetakse meelde järgmiseks korraks.</p>
+        <form id="build-form">
+          <div class="grid">
+            <label>Toote nimi <input id="build-name" list="part-names" required placeholder="nt. 6S 1300mAh aku"></label>
+            <label>Kategooria
+              <select id="build-category-select" class="combo" data-input="build-category"></select>
+              <input id="build-category" placeholder="Uus kategooria, nt. Akud" hidden>
+            </label>
+            <label>Mitu tükki valmistad <input id="build-count" type="number" min="1" step="1" value="1" required></label>
+          </div>
+          <h3>Osad ühe toote kohta</h3>
+          <div id="build-parts"></div>
+          <button type="button" class="small" id="build-add">+ Lisa osa</button>
+          <p id="build-summary" class="muted"></p>
+          <div class="actions"><button type="submit" class="primary">Valmista</button></div>
+        </form>
+      </details>
+
+      <div class="card">
+        <div class="toolbar">
+          <input id="part-search" type="search" placeholder="Otsi detaili…">
+          <select id="part-filter"><option value="">Kõik kategooriad</option></select>
+          <label class="check" id="show-hidden-wrap" hidden><input id="show-hidden" type="checkbox"> Näita otsas olevaid (<span id="hidden-count"></span>)</label>
+        </div>
+        <table>
+          <thead>
+            <tr><th>Nimi</th><th>Kategooria</th><th class="num">Laos</th><th class="num">Droonides</th><th class="num">Ühiku hind</th><th>Tarnija</th><th>Märkus</th><th>Ostulink</th><th></th></tr>
+          </thead>
+          <tbody id="part-list"></tbody>
+        </table>
+        <p id="part-empty" class="empty">Ladu on tühi. Lisa esimene detail üleval.</p>
+      </div>
+
+      <div class="card" id="tool-card" hidden>
+        <h2>Tööriistad</h2>
+        <table>
+          <thead>
+            <tr><th>Nimi</th><th class="num">Kogus</th><th class="num">Ühiku hind</th><th>Tarnija</th><th>Märkus</th><th>Ostulink</th><th></th></tr>
+          </thead>
+          <tbody id="tool-list"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- TELLITUD -->
+    <section id="tellitud" class="panel">
+      <form id="order-form" class="card">
+        <h2>Lisa tellimus</h2>
+        <div class="grid">
+          <label>Nimi <input id="order-name" list="part-names" required placeholder="nt. 2306 mootor"></label>
+          <label>Kategooria
+            <select id="order-category-select" class="combo" data-input="order-category"></select>
+            <input id="order-category" placeholder="Uus kategooria, nt. Mootorid" hidden>
+          </label>
+          <label>Tarnija
+            <select id="order-supplier-select" class="combo" data-input="order-supplier"></select>
+            <input id="order-supplier" placeholder="Uus tarnija, nt. AliExpress" hidden>
+          </label>
+          <label>Kogus
+            <span class="input-row">
+              <input id="order-qty" type="number" min="0" step="any" value="1" required>
+              <select id="order-unit" title="Ühik">
+                <option value="tk">tk</option>
+                <option value="m">m</option>
+              </select>
+            </span>
+          </label>
+          <label>Hind (€)
+            <span class="input-row">
+              <input id="order-price" type="number" min="0" step="0.01" placeholder="0.00">
+              <select id="order-price-mode" title="Kas hind on ühe tüki või kogu koguse eest">
+                <option value="unit">tk</option>
+                <option value="total">kokku</option>
+              </select>
+            </span>
+            <span id="order-price-hint" class="muted"></span>
+          </label>
+          <label>Märkus <input id="order-note" placeholder="nt. tellimuse nr"></label>
+          <label>Ostulink <input id="order-link" type="url" placeholder="https://…"></label>
+        </div>
+        <div class="actions"><button type="submit" class="primary">Lisa tellimus</button></div>
+      </form>
+
+      <div class="card">
+        <p id="order-total" class="muted"></p>
+        <table>
+          <thead>
+            <tr><th>Tellitud</th><th>Nimi</th><th>Tarnija</th><th class="num">Kogus</th><th class="num">Hind</th><th>Märkus</th><th>Ostulink</th><th></th></tr>
+          </thead>
+          <tbody id="order-list"></tbody>
+        </table>
+        <p id="order-empty" class="empty">Teel olevaid tellimusi pole. Kui tellimus saabub, vajuta „Kohal“ ja see läheb lattu.</p>
+      </div>
+      <datalist id="part-names"></datalist>
+    </section>
+
+    <!-- DROONID -->
+    <section id="droonid" class="panel">
+      <form id="drone-form" class="card">
+        <h2>Lisa droon</h2>
+        <div class="grid">
+          <label>Nimi <input id="drone-name" required placeholder="nt. 5&quot; freestyle"></label>
+          <label>Märkus <input id="drone-note" placeholder="nt. raam, ehitamise eesmärk"></label>
+        </div>
+        <div class="actions"><button type="submit" class="primary">Lisa droon</button></div>
+      </form>
+      <div id="drone-list"></div>
+      <p id="drone-empty" class="empty">Droone pole veel lisatud.</p>
+    </section>
+
+    <!-- AJALUGU -->
+    <section id="ajalugu" class="panel">
+      <div class="card">
+        <table>
+          <thead><tr><th>Aeg</th><th>Tegevus</th><th>Detail</th><th class="num">Kogus</th><th>Droon</th></tr></thead>
+          <tbody id="log-list"></tbody>
+        </table>
+        <p id="log-empty" class="empty">Ajalugu on tühi.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <button id="export-btn">Ekspordi varukoopia</button>
+    <label class="button">Impordi varukoopia <input id="import-file" type="file" accept="application/json" hidden></label>
+    <span class="hint">Andmed salvestatakse selle brauseri mällu ja sisse logides ka pilve.</span>
+  </footer>
+
+  <script src="app.js"></script>
+  <script type="module" src="sync.js"></script>
+</body>
+</html>
