@@ -26,7 +26,7 @@ function load() {
 
 let readOnly = false; // teise inimese lao vaatamine
 let mailbox = { list: [], hide: null }; // tellimuskirjad Gmailist, mis on veel lisamata
-let mailId = null; // tellimuse vorm on täidetud selle kirja põhjal
+let mailGroup = null; // tellimuse vorm on täidetud nende kirjade põhjal
 
 function save() {
   if (readOnly) {
@@ -57,6 +57,7 @@ window.appState = {
   // Tellimuskirjad Gmailist (sync.js): list ja funktsioon, mis kirja nimekirjast eemaldab
   setMailbox(list, hide) {
     mailbox = { list, hide };
+    applyMailUpdates();
     renderMailbox();
   },
 };
@@ -354,18 +355,71 @@ $('drone-list').addEventListener('click', (e) => {
 });
 
 /* ---------- Tellimused ---------- */
+/* Tellimuskirjad: uus tellimus → saadetud → kohale jõudnud. Sama tellimuse nr kirjad on üks rida. */
+const MAIL_STATUS = { new: 'Uus tellimus', shipped: '🚚 Saadetud', delivered: '📦 Kohale jõudnud' };
+const MAIL_RANK = { new: 0, shipped: 1, delivered: 2 };
+const ordersByNo = (no) => (no ? state.orders.filter((o) => o.orderNo === no || (o.note || '').includes(no)) : []);
+
+function mailGroups() {
+  const groups = new Map();
+  for (const m of mailbox.list) {
+    if (!MAIL_STATUS[m.status]) continue;
+    const key = m.orderNo ? `${m.shop}|${m.orderNo}` : m.id;
+    const g = groups.get(key) || { key, ids: [], mails: [] };
+    g.ids.push(m.id);
+    g.mails.push(m);
+    groups.set(key, g);
+  }
+  return [...groups.values()].map((g) => {
+    const mails = g.mails.sort((a, b) => (b.date || '').localeCompare(a.date || '')); // uusim ees
+    const latest = mails.reduce((a, b) => (MAIL_RANK[b.status] > MAIL_RANK[a.status] ? b : a));
+    const first = mails.findLast((m) => m.status === 'new') || mails[mails.length - 1]; // esimene tellimuse kiri
+    return {
+      ...g,
+      orderNo: first.orderNo || '',
+      shop: first.shop,
+      subject: first.subject,
+      date: mails[0].date,
+      status: latest.status,
+      statusDate: latest.date,
+      total: (mails.find((m) => m.status === 'new' && m.total != null) || mails.find((m) => m.total != null) || {}).total ?? null,
+      link: (mails.find((m) => m.link) || {}).link || '',
+      text: first.text,
+    };
+  });
+}
+
+/* Kui tellimus on juba nimekirjas, uuendatakse selle olekut ja kirjad eemaldatakse.
+   Vana kujuga kirjad (ilma liigita) kustutatakse. */
+function applyMailUpdates() {
+  if (readOnly || !mailbox.hide) return;
+  for (const m of mailbox.list) if (!MAIL_STATUS[m.status]) mailbox.hide(m.id);
+  let changed = false;
+  for (const g of mailGroups()) {
+    const orders = ordersByNo(g.orderNo);
+    if (!orders.length) continue;
+    for (const o of orders) {
+      if (g.status !== 'new' && (!o.track || MAIL_RANK[g.status] >= MAIL_RANK[o.track.status])) {
+        o.track = { status: g.status, date: g.statusDate };
+        changed = true;
+      }
+    }
+    g.ids.forEach((id) => mailbox.hide(id));
+  }
+  if (changed) save();
+}
+
 $('inbox-list').addEventListener('click', (e) => {
   const btn = e.target.closest('button[data-act]');
   if (!btn) return;
-  const id = btn.closest('tr').dataset.id;
-  const m = mailbox.list.find((x) => x.id === id);
+  const m = mailGroups().find((g) => g.key === btn.closest('tr').dataset.key);
   if (!m) return;
   if (btn.dataset.act === 'hide') {
-    if (confirm('Peida see kiri? Tellimust ei lisata.')) mailbox.hide(id);
+    if (confirm('Peida see tellimus? Seda ei lisata.')) m.ids.forEach((id) => mailbox.hide(id));
     return;
   }
   resetOrderForm();
-  mailId = id;
+  mailGroup = m;
   $('order-name').value = m.subject || '';
   setCombo('order-supplier', m.shop || '');
   if (m.total != null) {
@@ -436,7 +490,12 @@ $('order-form').addEventListener('submit', (e) => {
     addLog(order.status === 'planned' ? 'Plaanis osta' : 'Tellitud', null, order.qty, null, order.name);
     state.log[0].unit = order.unit;
   }
-  if (mailId && mailbox.hide) mailbox.hide(mailId); // kiri on lisatud, eemalda see meilide nimekirjast
+  if (mailGroup && !editing) {
+    // kirjad on lisatud: tellimus saab numbri (hilisemad saatmise kirjad uuendavad seda) ja kirjad eemaldatakse
+    order.orderNo = mailGroup.orderNo || undefined;
+    if (mailGroup.status !== 'new') order.track = { status: mailGroup.status, date: mailGroup.statusDate };
+    if (mailbox.hide) mailGroup.ids.forEach((id) => mailbox.hide(id));
+  }
   resetOrderForm();
   save();
 });
@@ -444,7 +503,7 @@ $('order-form').addEventListener('submit', (e) => {
 $('order-cancel').addEventListener('click', resetOrderForm);
 
 function resetOrderForm() {
-  mailId = null;
+  mailGroup = null;
   $('order-form').reset();
   updateOrderKind();
   $('order-id').value = '';
@@ -1230,7 +1289,7 @@ function renderOrders() {
       <td>${esc(o.supplier)}</td>
       <td class="num">${o.fil ? `${o.qty} rulli` : fmtQty(o.qty, unitOf(o))}</td>
       <td class="num">${o.price == null ? '' : money(o.price * o.qty)}${o.price != null && unitOf(o) === 'm' ? `<div class="muted">${priceLabel(o)}</div>` : ''}</td>
-      <td class="muted">${esc(o.note)}</td>
+      <td class="muted">${o.track ? `<span class="track track-${o.track.status}">${MAIL_STATUS[o.track.status]} ${fmt.format(new Date(o.track.date))}</span> ` : ''}${esc(o.note)}</td>
       <td>${linkHtml(o.link)}</td>
       <td class="row-actions">
         ${mainButton}
@@ -1256,10 +1315,11 @@ function renderOrders() {
 
 function renderMailbox() {
   const fmt = new Intl.DateTimeFormat('et-EE', { dateStyle: 'short' });
-  const list = [...mailbox.list].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  const list = mailGroups().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
   $('inbox-list').innerHTML = list.map((m) => `
-    <tr data-id="${esc(m.id)}">
+    <tr data-key="${esc(m.key)}">
       <td class="muted">${m.date ? fmt.format(new Date(m.date)) : ''}</td>
+      <td><span class="track track-${m.status}">${MAIL_STATUS[m.status]}</span></td>
       <td>${esc(m.shop)}</td>
       <td title="${esc(m.text)}">${esc(m.subject)}</td>
       <td class="muted">${esc(m.orderNo)}</td>

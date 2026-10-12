@@ -188,6 +188,9 @@ body.readonly :is(#part-form, #build-card, #order-form, #inbox-card, #drone-form
 .slot select { width: 100%; }
 .swatch { display: inline-block; width: 16px; height: 16px; border-radius: 50%; border: 1px solid var(--border); vertical-align: middle; flex: none; }
 .color-input { width: 44px; min-width: 44px; padding: 2px; flex: none !important; height: auto; }
+.track { display: inline-block; white-space: nowrap; font-size: .8rem; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--border); color: var(--text); }
+.track-shipped { border-color: #d29922; }
+.track-delivered { border-color: #3fb950; font-weight: 600; }
 .subform { margin-top: 12px; padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); }
 .subform h3 { margin: 0 0 8px; }
 .subform .grid + .grid { margin-top: 10px; }
