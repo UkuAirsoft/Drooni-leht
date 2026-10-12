@@ -14,5 +14,10 @@ service cloud.firestore {
         && (request.auth.uid == userId || request.auth.token.email in resource.data.viewers);
       allow write: if allowed() && request.auth.uid == userId;
     }
+
+    // Tellimuskirjad Gmailist (meil/Kood.gs kirjutab need). Omanik näeb ja saab peita.
+    match /postkast/{kiriId} {
+      allow read, delete: if allowed() && request.auth.token.email == resource.data.owner;
+    }
   }
 }

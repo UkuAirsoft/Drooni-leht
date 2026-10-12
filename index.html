@@ -126,12 +126,28 @@
 
     <!-- TELLITUD -->
     <section id="tellitud" class="panel">
+      <div class="card" id="inbox-card" hidden>
+        <h2>Uued tellimused meilist</h2>
+        <table>
+          <thead>
+            <tr><th>Kiri</th><th>Pood</th><th>Teema</th><th>Tellimuse nr</th><th class="num">Summa</th><th></th></tr>
+          </thead>
+          <tbody id="inbox-list"></tbody>
+        </table>
+      </div>
+
       <form id="order-form" class="card">
         <h2 id="order-form-title">Lisa tellimus</h2>
         <input type="hidden" id="order-id">
         <div class="grid">
-          <label>Nimi <input id="order-name" list="part-names" required placeholder="nt. 2306 mootor"></label>
-          <label>Kategooria
+          <label>Mis see on
+            <select id="order-kind">
+              <option value="">Tavaline asi</option>
+              <option value="printer">3D printer</option>
+            </select>
+          </label>
+          <label id="order-name-wrap">Nimi <input id="order-name" list="part-names" required placeholder="nt. 2306 mootor"></label>
+          <label id="order-category-wrap">Kategooria
             <select id="order-category-select" class="combo" data-input="order-category"></select>
             <input id="order-category" placeholder="Uus kategooria, nt. Mootorid" hidden>
           </label>
@@ -166,6 +182,34 @@
               <option value="planned">Plaanis osta</option>
             </select>
           </label>
+        </div>
+        <div id="order-printer" class="subform" hidden>
+          <h3>3D printeri asi</h3>
+          <div class="grid">
+            <label>Mis asi
+              <select id="order-ptype">
+                <option value="filament">Filament</option>
+                <option value="ams">AMS</option>
+                <option value="ams-ht">AMS HT</option>
+                <option value="spool">Korduvkasutatav spool</option>
+                <option value="nozzle">Düüs / hotend</option>
+                <option value="plate">Printimisplaat</option>
+                <option value="other">Muu printeri asi</option>
+              </select>
+            </label>
+          </div>
+          <div id="order-fil" class="grid">
+            <label>Materjal <input id="order-fil-material" list="fil-materials" placeholder="nt. PLA Basic"></label>
+            <label>Värv
+              <span class="input-row">
+                <input id="order-fil-hex" type="color" value="#ffffff" class="color-input" title="Vali värv">
+                <input id="order-fil-color" placeholder="nt. Valge">
+              </span>
+            </label>
+            <label>Tootja <input id="order-fil-brand" list="fil-brands" placeholder="nt. Bambu Lab"></label>
+            <label>Kaal rullil (g) <input id="order-fil-weight" type="number" min="0" step="1" value="1000"></label>
+          </div>
+          <p id="order-printer-hint" class="muted"></p>
         </div>
         <div class="actions">
           <button type="submit" class="primary" id="order-submit">Lisa tellimus</button>
@@ -279,6 +323,16 @@
           <tbody id="fil-list"></tbody>
         </table>
         <p id="fil-empty" class="empty">Filamenti pole laos. Lisa see üleval.</p>
+      </div>
+
+      <div class="card" id="pgear-card" hidden>
+        <h2>Printeri tarvikud laos</h2>
+        <table>
+          <thead>
+            <tr><th>Nimi</th><th class="num">Kogus</th><th class="num">Ühiku hind</th><th>Tarnija</th><th>Märkus</th><th>Ostulink</th><th></th></tr>
+          </thead>
+          <tbody id="pgear-list"></tbody>
+        </table>
       </div>
 
       <datalist id="fil-materials">

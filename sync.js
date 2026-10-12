@@ -36,6 +36,7 @@ async function start() {
   });
 
   let unsubscribe = null;
+  let unsubMail = null;
   let ownRef = null;
   let user = null;
 
@@ -79,6 +80,9 @@ async function start() {
 
   auth.onAuthStateChanged(authApi, async (u) => {
     stopWatching();
+    if (unsubMail) unsubMail();
+    unsubMail = null;
+    window.appState.setMailbox([], null);
     user = u;
     select.hidden = true;
     if (document.body.classList.contains('readonly')) {
@@ -110,6 +114,13 @@ async function start() {
       return;
     }
     watch(ownRef, false);
+
+    // Tellimuskirjad Gmailist (meil/Kood.gs), mida pole veel lattu lisatud
+    unsubMail = fs.onSnapshot(
+      fs.query(fs.collection(db, 'postkast'), fs.where('owner', '==', user.email.toLowerCase())),
+      (s) => window.appState.setMailbox(s.docs.map((d) => ({ id: d.id, ...d.data() })),
+        (id) => fs.deleteDoc(fs.doc(db, 'postkast', id)).catch((e) => alert('Kirja peitmine ebaõnnestus: ' + e.message))),
+      () => { /* postkasti pole või ligipääs puudub */ });
 
     // Teiste ladud, mida sellel kasutajal on lubatud vaadata
     try {

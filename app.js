@@ -4,7 +4,11 @@ const LOW_STOCK = 1; // tõsta esile read, kus laoseis on sellest väiksem või 
 const SECTIONS = [
   { key: 'tool', category: 'Tööriistad', match: /^tööriist/i },
   { key: 'charger', category: 'Laadijad', match: /^laadija/i },
+  { key: 'pgear', category: '3D printer', match: /^3d[ -]?printer/i }, // näidatakse 3D printeri lehel
 ];
+const PRINTER_CATEGORY = '3D printer';
+const PTYPES = { filament: 'Filament', ams: 'AMS', 'ams-ht': 'AMS HT', spool: 'Korduvkasutatav spool',
+  nozzle: 'Düüs / hotend', plate: 'Printimisplaat', other: 'Muu printeri asi' };
 
 let state = load();
 
@@ -21,6 +25,8 @@ function load() {
 }
 
 let readOnly = false; // teise inimese lao vaatamine
+let mailbox = { list: [], hide: null }; // tellimuskirjad Gmailist, mis on veel lisamata
+let mailId = null; // tellimuse vorm on täidetud selle kirja põhjal
 
 function save() {
   if (readOnly) {
@@ -47,6 +53,11 @@ window.appState = {
   setReadOnly(on) {
     readOnly = on;
     document.body.classList.toggle('readonly', on);
+  },
+  // Tellimuskirjad Gmailist (sync.js): list ja funktsioon, mis kirja nimekirjast eemaldab
+  setMailbox(list, hide) {
+    mailbox = { list, hide };
+    renderMailbox();
   },
 };
 
@@ -211,6 +222,7 @@ document.querySelectorAll('select.combo').forEach((sel) => {
 
 function editPart(id) {
   const p = partById(id);
+  document.querySelector('.tab[data-tab="ladu"]').click(); // printeri tarvikuid muudetakse lao vormis
   $('part-id').value = p.id;
   $('part-name').value = p.name;
   setCombo('part-category', p.category || '');
@@ -342,6 +354,35 @@ $('drone-list').addEventListener('click', (e) => {
 });
 
 /* ---------- Tellimused ---------- */
+$('inbox-list').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-act]');
+  if (!btn) return;
+  const id = btn.closest('tr').dataset.id;
+  const m = mailbox.list.find((x) => x.id === id);
+  if (!m) return;
+  if (btn.dataset.act === 'hide') {
+    if (confirm('Peida see kiri? Tellimust ei lisata.')) mailbox.hide(id);
+    return;
+  }
+  resetOrderForm();
+  mailId = id;
+  $('order-name').value = m.subject || '';
+  setCombo('order-supplier', m.shop || '');
+  if (m.total != null) {
+    $('order-price').value = m.total;
+    $('order-price-mode').value = 'total';
+  }
+  $('order-note').value = m.orderNo ? 'Tellimus ' + m.orderNo : '';
+  $('order-link').value = m.link || '';
+  $('order-status').value = 'ordered';
+  updatePriceHint('order');
+  $('order-form-title').textContent = 'Lisa tellimus meilist';
+  $('order-cancel').hidden = false;
+  $('order-form').scrollIntoView({ behavior: 'smooth' });
+  $('order-name').focus();
+  $('order-name').select();
+});
+
 $('order-form').addEventListener('submit', (e) => {
   e.preventDefault();
   const editing = state.orders.find((o) => o.id === $('order-id').value);
@@ -358,7 +399,27 @@ $('order-form').addEventListener('submit', (e) => {
     note: $('order-note').value.trim(),
     link: $('order-link').value.trim(),
     status: $('order-status').value,
+    kind: undefined, ptype: undefined, fil: undefined, // tavalisel tellimusel neid pole
   };
+  if ($('order-kind').value === 'printer') {
+    order.kind = 'printer';
+    order.ptype = $('order-ptype').value;
+    order.category = PRINTER_CATEGORY;
+    if (order.ptype === 'filament') {
+      order.fil = {
+        material: $('order-fil-material').value.trim(),
+        color: $('order-fil-color').value.trim(),
+        hex: $('order-fil-hex').value,
+        brand: $('order-fil-brand').value.trim(),
+        weight: Math.max(0, Math.round(parseFloat($('order-fil-weight').value) || 0)),
+      };
+      order.name = filLabel(order.fil);
+      order.unit = 'tk';
+      order.qty = Math.round(order.qty);
+    } else {
+      order.name ||= PTYPES[order.ptype];
+    }
+  }
   if (!order.name) return;
   if (!(order.qty > 0)) {
     alert('Kogus peab olema suurem kui 0.');
@@ -375,6 +436,7 @@ $('order-form').addEventListener('submit', (e) => {
     addLog(order.status === 'planned' ? 'Plaanis osta' : 'Tellitud', null, order.qty, null, order.name);
     state.log[0].unit = order.unit;
   }
+  if (mailId && mailbox.hide) mailbox.hide(mailId); // kiri on lisatud, eemalda see meilide nimekirjast
   resetOrderForm();
   save();
 });
@@ -382,7 +444,9 @@ $('order-form').addEventListener('submit', (e) => {
 $('order-cancel').addEventListener('click', resetOrderForm);
 
 function resetOrderForm() {
+  mailId = null;
   $('order-form').reset();
+  updateOrderKind();
   $('order-id').value = '';
   $('order-qty').value = 1;
   $('order-form-title').textContent = 'Lisa tellimus';
@@ -407,6 +471,28 @@ $('order-name').addEventListener('change', () => {
 
 const statusOf = (o) => o.status || 'ordered';
 
+/* 3D printeri asja valimisel avaneb lisaosa; filamendil on nimi materjal + värv */
+function updateOrderKind() {
+  const printer = $('order-kind').value === 'printer';
+  const ptype = $('order-ptype').value;
+  const fil = printer && ptype === 'filament';
+  $('order-printer').hidden = !printer;
+  $('order-fil').hidden = !fil;
+  $('order-name-wrap').hidden = fil;
+  $('order-category-wrap').hidden = printer;
+  $('order-name').required = !printer;
+  $('order-fil-material').required = fil;
+  if (fil) $('order-unit').value = 'tk';
+  $('order-unit').disabled = fil;
+  $('order-printer-hint').textContent = !printer ? ''
+    : fil ? 'Kogus = rullide arv. Kui vajutad „Kohal“, lähevad rullid 3D printeri lehel filamendi lattu.'
+    : 'Kui vajutad „Kohal“, läheb see 3D printeri lehel „Printeri tarvikud laos“ alla.'
+      + ($('order-name').value ? '' : ` Kui nime ei kirjuta, saab nimeks „${PTYPES[ptype]}“.`);
+}
+$('order-kind').addEventListener('change', updateOrderKind);
+$('order-ptype').addEventListener('change', updateOrderKind);
+$('order-name').addEventListener('input', () => { if ($('order-kind').value === 'printer') updateOrderKind(); });
+
 function markOrdered(id) {
   const order = state.orders.find((o) => o.id === id);
   order.status = 'ordered';
@@ -416,8 +502,26 @@ function markOrdered(id) {
   save();
 }
 
+/* Saabunud filament läheb filamendi lattu: sama rull juurde, uus eraldi reale */
+function receiveFilament(order) {
+  const f = order.fil;
+  const same = state.filaments.find((x) => x.material === f.material && x.color === f.color
+    && x.brand === f.brand && x.hex === f.hex && x.weight === f.weight);
+  if (same) {
+    same.count += order.qty;
+    if (order.price != null) same.price = order.price;
+    same.link ||= order.link;
+  } else {
+    state.filaments.push({ id: uid(), ...f, count: order.qty, price: order.price, note: '', link: order.link });
+  }
+  state.orders = state.orders.filter((o) => o.id !== order.id);
+  filLog('Saabus lattu', f, order.qty);
+  save();
+}
+
 function receiveOrder(id) {
   const order = state.orders.find((o) => o.id === id);
+  if (order.ptype === 'filament' && order.fil) return receiveFilament(order);
   const existing = state.parts.find((p) => p.name.toLowerCase() === order.name.toLowerCase());
   let partId;
   if (existing) {
@@ -452,6 +556,16 @@ function editOrder(id) {
   $('order-note').value = o.note || '';
   $('order-link').value = o.link || '';
   $('order-status').value = statusOf(o);
+  $('order-kind').value = o.kind === 'printer' ? 'printer' : '';
+  $('order-ptype').value = o.ptype || 'filament';
+  if (o.fil) {
+    $('order-fil-material').value = o.fil.material;
+    $('order-fil-color').value = o.fil.color || '';
+    $('order-fil-hex').value = safeHex(o.fil.hex);
+    $('order-fil-brand').value = o.fil.brand || '';
+    $('order-fil-weight').value = o.fil.weight;
+  }
+  updateOrderKind();
   updatePriceHint('order');
   $('order-form-title').textContent = 'Muuda tellimust';
   $('order-submit').textContent = 'Salvesta';
@@ -1112,9 +1226,9 @@ function renderOrders() {
   const row = (o, mainButton) => `
     <tr data-id="${o.id}">
       <td class="muted">${fmt.format(new Date(o.date))}</td>
-      <td>${esc(o.name)}</td>
+      <td>${o.fil ? `<span class="swatch" style="background:${safeHex(o.fil.hex)}"></span> ` : ''}${esc(o.name)}${o.kind === 'printer' ? ` <span class="muted">· ${o.fil ? 'filament' : '3D printer'}</span>` : ''}</td>
       <td>${esc(o.supplier)}</td>
-      <td class="num">${fmtQty(o.qty, unitOf(o))}</td>
+      <td class="num">${o.fil ? `${o.qty} rulli` : fmtQty(o.qty, unitOf(o))}</td>
       <td class="num">${o.price == null ? '' : money(o.price * o.qty)}${o.price != null && unitOf(o) === 'm' ? `<div class="muted">${priceLabel(o)}</div>` : ''}</td>
       <td class="muted">${esc(o.note)}</td>
       <td>${linkHtml(o.link)}</td>
@@ -1138,6 +1252,24 @@ function renderOrders() {
   const plannedTotal = sum(planned);
   $('planned-total').textContent = planned.length ? `${planned.length} asja${plannedTotal ? ' · ' + money(plannedTotal) : ''}` : '';
   $('planned-empty').hidden = planned.length > 0;
+}
+
+function renderMailbox() {
+  const fmt = new Intl.DateTimeFormat('et-EE', { dateStyle: 'short' });
+  const list = [...mailbox.list].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  $('inbox-list').innerHTML = list.map((m) => `
+    <tr data-id="${esc(m.id)}">
+      <td class="muted">${m.date ? fmt.format(new Date(m.date)) : ''}</td>
+      <td>${esc(m.shop)}</td>
+      <td title="${esc(m.text)}">${esc(m.subject)}</td>
+      <td class="muted">${esc(m.orderNo)}</td>
+      <td class="num">${m.total == null ? '' : money(m.total)}</td>
+      <td class="row-actions">
+        <button class="small primary" data-act="add">Lisa</button>
+        <button class="small danger" data-act="hide">Peida</button>
+      </td>
+    </tr>`).join('');
+  $('inbox-card').hidden = list.length === 0;
 }
 
 function renderLog() {

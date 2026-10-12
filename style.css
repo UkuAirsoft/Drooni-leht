@@ -163,7 +163,7 @@ h3 { font-size: .9rem; margin: 16px 0 8px; }
 }
 
 /* Teise inimese lao vaatamine: muutmise vormid ja nupud on peidetud */
-body.readonly :is(#part-form, #build-card, #order-form, #drone-form, .install-form, .row-actions, button[data-act], footer .button) { display: none !important; }
+body.readonly :is(#part-form, #build-card, #order-form, #inbox-card, #drone-form, .install-form, .row-actions, button[data-act], footer .button) { display: none !important; }
 #planned-total:empty { display: none; }
 #planned-total { margin: 0 0 8px; }
 
@@ -188,5 +188,10 @@ body.readonly :is(#part-form, #build-card, #order-form, #drone-form, .install-fo
 .slot select { width: 100%; }
 .swatch { display: inline-block; width: 16px; height: 16px; border-radius: 50%; border: 1px solid var(--border); vertical-align: middle; flex: none; }
 .color-input { width: 44px; min-width: 44px; padding: 2px; flex: none !important; height: auto; }
+.subform { margin-top: 12px; padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); }
+.subform h3 { margin: 0 0 8px; }
+.subform .grid + .grid { margin-top: 10px; }
+#order-printer-hint:empty { display: none; }
+#order-printer-hint { margin: 8px 0 0; }
 body.readonly :is(#printer-form-card, #fil-form-card, .slot-load) { display: none !important; }
 body.readonly .slot-g input { pointer-events: none; border-color: transparent; background: transparent; }
