@@ -191,6 +191,15 @@ body.readonly :is(#part-form, #build-card, #order-form, #inbox-card, #drone-form
 .track { display: inline-block; white-space: nowrap; font-size: .8rem; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--border); color: var(--text); }
 .track-shipped { border-color: #d29922; }
 .track-delivered { border-color: #3fb950; font-weight: 600; }
+.mail-body { white-space: pre-wrap; max-height: 320px; overflow-y: auto; font-size: .85rem; padding: 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--card); margin-top: 6px; }
+.mail-body-row td { padding-top: 0; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips button.used { opacity: .5; }
+.chips button.current { outline: 2px solid var(--accent); }
+#order-mail { margin: 0 0 12px; }
+#order-mail details summary { cursor: pointer; color: var(--muted); margin-top: 8px; }
+#order-mail-hint:empty { display: none; }
+#order-mail-hint { margin: 0 0 8px; }
 .subform { margin-top: 12px; padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); }
 .subform h3 { margin: 0 0 8px; }
 .subform .grid + .grid { margin-top: 10px; }

@@ -360,11 +360,18 @@ const MAIL_STATUS = { new: 'Uus tellimus', shipped: '🚚 Saadetud', delivered: 
 const MAIL_RANK = { new: 0, shipped: 1, delivered: 2 };
 const ordersByNo = (no) => (no ? state.orders.filter((o) => o.orderNo === no || (o.note || '').includes(no)) : []);
 
+function parseItems(json) {
+  try {
+    const list = JSON.parse(json || '[]');
+    return Array.isArray(list) ? list.filter((x) => x && x.name) : [];
+  } catch { return []; }
+}
+
 function mailGroups() {
   const groups = new Map();
   for (const m of mailbox.list) {
     if (!MAIL_STATUS[m.status]) continue;
-    const key = m.orderNo ? `${m.shop}|${m.orderNo}` : m.id;
+    const key = m.orderNo ? `${m.shop}|${m.orderNo}` : `${m.shop}|${m.subject}|${m.total}`; // edasi saadetud koopia on sama rida
     const g = groups.get(key) || { key, ids: [], mails: [] };
     g.ids.push(m.id);
     g.mails.push(m);
@@ -384,7 +391,8 @@ function mailGroups() {
       statusDate: latest.date,
       total: (mails.find((m) => m.status === 'new' && m.total != null) || mails.find((m) => m.total != null) || {}).total ?? null,
       link: (mails.find((m) => m.link) || {}).link || '',
-      text: first.text,
+      text: first.text || '',
+      items: parseItems(first.items),
     };
   });
 }
@@ -418,23 +426,71 @@ $('inbox-list').addEventListener('click', (e) => {
     if (confirm('Peida see tellimus? Seda ei lisata.')) m.ids.forEach((id) => mailbox.hide(id));
     return;
   }
+  if (btn.dataset.act === 'body') {
+    openMails.has(m.key) ? openMails.delete(m.key) : openMails.add(m.key);
+    renderMailbox();
+    return;
+  }
+  startMailOrder({ ...m, used: new Set(), added: false }, 0);
+});
+
+const openMails = new Set(); // meilide nimekirjas lahti tehtud kirjad
+
+/* Vorm täidetakse kirja põhjal; mitme tootega kirjast lisatakse tooted ükshaaval */
+function startMailOrder(g, index) {
   resetOrderForm();
-  mailGroup = m;
-  $('order-name').value = m.subject || '';
-  setCombo('order-supplier', m.shop || '');
-  if (m.total != null) {
-    $('order-price').value = m.total;
+  mailGroup = g;
+  g.current = g.items.length ? index : -1;
+  const item = g.items[index];
+  $('order-name').value = item ? item.name : g.subject || '';
+  if (item && item.qty > 1) $('order-qty').value = item.qty;
+  setCombo('order-supplier', g.shop || '');
+  if (item && item.price != null) {
+    $('order-price').value = item.price;
+  } else if (!g.added && g.total != null && g.items.length <= 1) {
+    $('order-price').value = g.total;
     $('order-price-mode').value = 'total';
   }
-  $('order-note').value = m.orderNo ? 'Tellimus ' + m.orderNo : '';
-  $('order-link').value = m.link || '';
+  $('order-note').value = g.orderNo ? 'Tellimus ' + g.orderNo : '';
+  $('order-link').value = g.link || '';
   $('order-status').value = 'ordered';
   updatePriceHint('order');
   $('order-form-title').textContent = 'Lisa tellimus meilist';
   $('order-cancel').hidden = false;
+  renderMailForm();
   $('order-form').scrollIntoView({ behavior: 'smooth' });
   $('order-name').focus();
   $('order-name').select();
+}
+
+function renderMailForm() {
+  const g = mailGroup;
+  $('order-mail').hidden = !g;
+  if (!g) return;
+  $('order-mail-items').innerHTML = g.items.map((it, i) => `
+    <button type="button" class="small${g.used.has(i) ? ' used' : ''}${g.current === i ? ' current' : ''}" data-i="${i}">
+      ${g.used.has(i) ? '✓ ' : ''}${esc(it.name)}${it.qty > 1 ? ` · ${it.qty} tk` : ''}${it.price != null ? ' · ' + money(it.price) : ''}
+    </button>`).join('');
+  $('order-mail-hint').textContent = !g.items.length
+    ? 'Kirjast ei leitud tootenimesid. Vaata kirja sisu ja kirjuta nimi ise.'
+    : g.items.length > 1 ? `Kirjas on ${g.items.length} toodet. Vali toode, kontrolli nime ja vajuta „Lisa tellimus“. Pärast seda tuleb järgmine toode.`
+    : '';
+  $('order-mail-text').textContent = g.text;
+}
+
+$('order-mail-items').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-i]');
+  if (!btn || !mailGroup) return;
+  const i = Number(btn.dataset.i);
+  const item = mailGroup.items[i];
+  mailGroup.current = i;
+  $('order-name').value = item.name;
+  $('order-qty').value = item.qty || 1;
+  $('order-price').value = item.price ?? '';
+  $('order-price-mode').value = 'unit';
+  updatePriceHint('order');
+  renderMailForm();
+  $('order-name').focus();
 });
 
 $('order-form').addEventListener('submit', (e) => {
@@ -490,20 +546,26 @@ $('order-form').addEventListener('submit', (e) => {
     addLog(order.status === 'planned' ? 'Plaanis osta' : 'Tellitud', null, order.qty, null, order.name);
     state.log[0].unit = order.unit;
   }
-  if (mailGroup && !editing) {
+  const g = !editing && mailGroup;
+  if (g) {
     // kirjad on lisatud: tellimus saab numbri (hilisemad saatmise kirjad uuendavad seda) ja kirjad eemaldatakse
-    order.orderNo = mailGroup.orderNo || undefined;
-    if (mailGroup.status !== 'new') order.track = { status: mailGroup.status, date: mailGroup.statusDate };
-    if (mailbox.hide) mailGroup.ids.forEach((id) => mailbox.hide(id));
+    order.orderNo = g.orderNo || undefined;
+    if (g.status !== 'new') order.track = { status: g.status, date: g.statusDate };
+    if (!g.added && mailbox.hide) g.ids.forEach((id) => mailbox.hide(id));
+    g.added = true;
+    if (g.current >= 0) g.used.add(g.current);
   }
   resetOrderForm();
   save();
+  const next = g ? g.items.findIndex((_, i) => !g.used.has(i)) : -1;
+  if (next >= 0) startMailOrder(g, next); // sama kirja järgmine toode
 });
 
 $('order-cancel').addEventListener('click', resetOrderForm);
 
 function resetOrderForm() {
   mailGroup = null;
+  renderMailForm();
   $('order-form').reset();
   updateOrderKind();
   $('order-id').value = '';
@@ -1080,6 +1142,8 @@ function renderParts() {
     .filter((p) => (!cat || p.category === cat) && (!q || `${p.name} ${p.category} ${p.supplier || ''} ${p.note}`.toLowerCase().includes(q)))
     .sort((a, b) => (a.category || '').localeCompare(b.category || '') || a.name.localeCompare(b.name));
   const parts = rows.filter((p) => !isSeparate(p));
+  const installed = {}; // mitu tükki igat detaili on droonides (üks läbikäik, mitte iga rea jaoks)
+  for (const d of state.drones) for (const [id, q] of Object.entries(d.parts)) installed[id] = (installed[id] || 0) + q;
 
   const actions = `
       <td class="row-actions">
@@ -1094,7 +1158,7 @@ function renderParts() {
       <td>${esc(p.name)}</td>
       <td>${esc(p.category)}</td>
       <td class="num">${fmtQty(p.qty, unitOf(p))}</td>
-      <td class="num">${fmtQty(installedCount(p.id), unitOf(p))}</td>
+      <td class="num">${fmtQty(roundQty(installed[p.id] || 0), unitOf(p))}</td>
       <td class="num">${priceLabel(p)}</td>
       <td>${esc(p.supplier)}</td>
       <td class="muted">${esc(p.note)}</td>
@@ -1321,14 +1385,16 @@ function renderMailbox() {
       <td class="muted">${m.date ? fmt.format(new Date(m.date)) : ''}</td>
       <td><span class="track track-${m.status}">${MAIL_STATUS[m.status]}</span></td>
       <td>${esc(m.shop)}</td>
-      <td title="${esc(m.text)}">${esc(m.subject)}</td>
+      <td>${esc(m.subject)}${m.items.length ? ` <span class="muted">· ${m.items.length} toodet</span>` : ''}</td>
       <td class="muted">${esc(m.orderNo)}</td>
       <td class="num">${m.total == null ? '' : money(m.total)}</td>
       <td class="row-actions">
+        <button class="small" data-act="body">${openMails.has(m.key) ? 'Peida kiri' : 'Kiri'}</button>
         <button class="small primary" data-act="add">Lisa</button>
         <button class="small danger" data-act="hide">Peida</button>
       </td>
-    </tr>`).join('');
+    </tr>${openMails.has(m.key) ? `
+    <tr class="mail-body-row" data-key="${esc(m.key)}"><td colspan="7"><div class="mail-body">${esc(m.text) || '<span class="muted">Kirja sisu puudub. Käivita skriptis „loeUuesti“.</span>'}</div></td></tr>` : ''}`).join('');
   $('inbox-card').hidden = list.length === 0;
 }
 

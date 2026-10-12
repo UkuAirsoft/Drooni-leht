@@ -138,6 +138,15 @@
 
       <form id="order-form" class="card">
         <h2 id="order-form-title">Lisa tellimus</h2>
+        <div id="order-mail" class="subform" hidden>
+          <h3>Kirjast leitud tooted</h3>
+          <p id="order-mail-hint" class="muted"></p>
+          <div id="order-mail-items" class="chips"></div>
+          <details>
+            <summary>Näita kirja sisu</summary>
+            <div id="order-mail-text" class="mail-body"></div>
+          </details>
+        </div>
         <input type="hidden" id="order-id">
         <div class="grid">
           <label>Mis see on
