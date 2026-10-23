@@ -1159,13 +1159,91 @@ $('coin-remove').addEventListener('click', () => {
   showCoinPick(true);
 });
 
-$('coin-grid').addEventListener('click', (e) => {
-  const tile = e.target.closest('[data-id]');
-  if (!tile) return;
-  const c = coinById.get(tile.dataset.id);
-  if (e.target.closest('button[data-act="add"]')) addCoin(c, 1, '');
-  else pickCoin(c.id);
+for (const list of ['coin-grid', 'coin-ai-list']) {
+  $(list).addEventListener('click', (e) => {
+    const tile = e.target.closest('[data-id]');
+    if (!tile) return;
+    const c = coinById.get(tile.dataset.id);
+    if (e.target.closest('button[data-act="add"]')) addCoin(c, 1, '');
+    else pickCoin(c.id);
+  });
+}
+
+/* Foto: Claude ütleb riigi, nimiväärtuse, aasta ja kujunduse; kataloogist otsitakse sobivaimad mündid */
+let coinAi = null; // { photo, result, candidates } või { photo, busy } / { photo, error }
+
+$('coin-photo').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file || !window.coinIdentify) return;
+  if (coinAi?.photo) URL.revokeObjectURL(coinAi.photo);
+  coinAi = { photo: URL.createObjectURL(file), busy: true };
+  renderCoinAi();
+  try {
+    const result = await window.coinIdentify(await photoBase64(file));
+    if (result.viga) throw new Error(result.viga);
+    coinAi = { photo: coinAi.photo, result, candidates: coinCandidates(result) };
+  } catch (err) {
+    coinAi = { photo: coinAi.photo, error: err.message || String(err) };
+  }
+  renderCoinAi();
 });
+
+/* Telefoni foto on mitu MB; Claude'ile piisab 1024 px pildist */
+async function photoBase64(file) {
+  const img = await createImageBitmap(file, { imageOrientation: 'from-image' });
+  const scale = Math.min(1, 1024 / Math.max(img.width, img.height));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(img.width * scale);
+  canvas.height = Math.round(img.height * scale);
+  canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
+}
+
+function coinCandidates(r) {
+  if (!countryName[r.country]) return [];
+  const words = [...new Set(fold(r.design).split(/[^a-z0-9]+/).filter((w) => w.length > 3))];
+  const regular = (c) => !c.y && c.sy && /^\d+$/.test(c.sy);
+  const score = (c) => {
+    let s = 0;
+    if (c.d === r.denomination) s += 40;
+    if (!!c.y === r.commemorative) s += 30;
+    if (c.y && r.year) s += c.y === r.year ? 40 : Math.abs(c.y - r.year) <= 1 ? 10 : 0;
+    // tavamündi seeria: viimane seeria, mis on alanud mündi aastaks
+    if (regular(c) && r.year && +c.sy <= r.year
+      && !COIN_CATALOG.some((o) => o.cc === c.cc && o.d === c.d && regular(o) && +o.sy > +c.sy && +o.sy <= r.year)) s += 20;
+    if (c.f) s += words.filter((w) => fold(c.f).includes(w)).length * 8;
+    return s;
+  };
+  return sortedCoins.filter((c) => c.cc === r.country)
+    .map((c) => [c, score(c)])
+    .filter(([, s]) => s >= 30)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 6)
+    .map(([c]) => c);
+}
+
+function renderCoinAi() {
+  $('coin-ai').hidden = !coinAi;
+  if (!coinAi) return;
+  $('coin-ai-photo').src = coinAi.photo;
+  const r = coinAi.result;
+  const best = coinAi.candidates?.[0];
+  let html;
+  if (coinAi.busy) html = '<p class="muted">Tuvastan münti…</p>';
+  else if (coinAi.error) html = `<p class="warn-text">${esc(coinAi.error)}</p>`;
+  else if (!best) html = '<p><strong>Ei tundnud münti ära.</strong></p>';
+  else {
+    html = `<p class="muted">Tundub, et see on</p><p><strong>${esc(coinTitle(best))}</strong> · ${esc(coinSub(best))}</p>`
+      + (state.coins[best.id]
+        ? '<p class="coin-ai-verdict ok-text">✓ See münt on sul olemas</p>'
+        : '<p class="coin-ai-verdict warn-text">✗ Seda münti sul veel pole</p>');
+  }
+  if (r?.note) html += `<p class="muted">${esc(r.note)}</p>`;
+  if (best) html += `<p class="muted">${coinAi.candidates.length > 1 ? 'Kontrolli pilte: kui esimene ei ole õige, vali allpool teine.' : 'Kontrolli pilti.'} Vajuta mündil, et see vormis avada.</p>`;
+  $('coin-ai-text').innerHTML = html;
+  $('coin-ai-list').innerHTML = (coinAi.candidates || []).map(coinTile).join('');
+}
 
 for (const id of ['coin-search', 'coin-filter-country', 'coin-filter-type', 'coin-filter-have']) {
   $(id).addEventListener('input', () => {
@@ -1535,6 +1613,7 @@ function renderCoins() {
   }
   fillCoinSelect();
   showCoinPick(false);
+  renderCoinAi();
 
   const owned = COIN_CATALOG.filter((c) => state.coins[c.id]);
   const pcs = owned.reduce((s, c) => s + state.coins[c.id].qty, 0);
@@ -1558,6 +1637,20 @@ function fillCoinSelect() {
   sel.disabled = !cc;
 }
 
+function coinTile(c) {
+  const own = state.coins[c.id];
+  return `
+    <div class="coin${own ? ' have' : ''}" data-id="${esc(c.id)}" title="${esc(own?.note || 'Vaata või muuda')}">
+      <img src="${esc(coinImg(c))}" alt="" loading="lazy">
+      <div class="coin-title">${esc(coinTitle(c))}</div>
+      <div class="coin-sub">${esc(coinSub(c))}</div>
+      ${c.f ? `<div class="coin-feature">${esc(c.f)}</div>` : ''}
+      <div class="coin-foot">${own
+        ? `<span class="coin-badge">✓ Olemas${own.qty > 1 ? ` · ${own.qty} tk` : ''}</span>`
+        : '<span class="coin-badge missing">Puudu</span><button type="button" class="small" data-act="add" title="Lisa kogusse">+ Lisa</button>'}</div>
+    </div>`;
+}
+
 function renderCoinGrid() {
   const words = fold($('coin-search').value).split(/\s+/).filter(Boolean);
   const cc = $('coin-filter-country').value;
@@ -1571,19 +1664,7 @@ function renderCoinGrid() {
     const hay = own?.note ? c.hay + ' ' + fold(own.note) : c.hay;
     return words.every((w) => hay.includes(w));
   });
-  $('coin-grid').innerHTML = list.slice(0, coinLimit).map((c) => {
-    const own = state.coins[c.id];
-    return `
-    <div class="coin${own ? ' have' : ''}" data-id="${esc(c.id)}" title="${esc(own?.note || 'Vaata või muuda')}">
-      <img src="${esc(coinImg(c))}" alt="" loading="lazy">
-      <div class="coin-title">${esc(coinTitle(c))}</div>
-      <div class="coin-sub">${esc(coinSub(c))}</div>
-      ${c.f ? `<div class="coin-feature">${esc(c.f)}</div>` : ''}
-      <div class="coin-foot">${own
-        ? `<span class="coin-badge">✓ Olemas${own.qty > 1 ? ` · ${own.qty} tk` : ''}</span>`
-        : '<span class="coin-badge missing">Puudu</span><button type="button" class="small" data-act="add" title="Lisa kogusse">+ Lisa</button>'}</div>
-    </div>`;
-  }).join('');
+  $('coin-grid').innerHTML = list.slice(0, coinLimit).map(coinTile).join('');
   const filtered = words.length || cc || type || have;
   const found = list.filter((c) => state.coins[c.id]).length;
   $('coin-found').textContent = filtered && list.length ? `Leitud ${list.length} münti, neist sul olemas ${found}` : '';

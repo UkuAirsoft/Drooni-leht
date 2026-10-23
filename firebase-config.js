@@ -9,6 +9,9 @@ export const firebaseConfig = {
   appId: '1:1081314026463:web:c881bba7d10444b1d11a6a',
 };
 
+// Mündi tuvastamine fotolt: Apps Scripti veebirakenduse URL (vt mundid/tuvasta/Kood.gs). Tühi = nuppu pole.
+export const coinAiUrl = 'https://script.google.com/macros/s/AKfycbxgx-mrp-EgBOJwL1pDTivkYKQn3LjHfEqBiTjMVRF2gZlyy22ONUlOgKx9xDYTtKe_/exec';
+
 // Kes kelle ladu näha tohib (ainult vaatamiseks). Kasuta väikeseid tähti.
 // Iga aadress peab olema ka firestore.rules failis lubatud aadresside nimekirjas.
 export const shares = {

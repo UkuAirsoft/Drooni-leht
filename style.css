@@ -235,6 +235,14 @@ body.readonly .slot-g input { pointer-events: none; border-color: transparent; b
 .coin-badge { font-size: .78rem; font-weight: 600; color: var(--ok); }
 .coin-badge.missing { color: var(--muted); font-weight: 400; }
 .coin-source { margin: 12px 0 0; }
+.button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+#coin-form .drone-head { align-items: center; }
+#coin-ai { margin: 0 0 12px; }
+.coin-ai-head { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 10px; }
+.coin-ai-head img { width: 110px; height: 110px; object-fit: cover; border-radius: 8px; flex: none; }
+.coin-ai-head p { margin: 0 0 4px; }
+.coin-ai-verdict { font-size: 1.1rem; font-weight: 700; }
+#coin-ai-list:empty { display: none; }
 .coin-source a { color: var(--accent); }
 body.readonly #coin-form { display: none !important; }
 body.readonly .coin { cursor: default; }

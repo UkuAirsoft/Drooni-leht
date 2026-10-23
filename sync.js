@@ -1,7 +1,7 @@
 /* Pilve sünkroonimine Firebase'iga: samad andmed arvutis ja telefonis.
    Igaühel on oma ladu (ladu/{uid}); teiste jagatud ladusid saab ainult vaadata.
    Kui firebase-config.js on täitmata, töötab leht edasi ainult brauseri mäluga. */
-import { firebaseConfig, shares } from './firebase-config.js';
+import { firebaseConfig, shares, coinAiUrl } from './firebase-config.js';
 
 const SDK = 'https://www.gstatic.com/firebasejs/10.12.2/';
 const SYNCED_KEY = 'drooni-ladu-synced-uid'; // kelle andmetega see seade on juba sünkroonitud
@@ -84,6 +84,12 @@ async function start() {
     unsubMail = null;
     window.appState.setMailbox([], null);
     user = u;
+    // Mündi foto saadetakse koos sisselogimise tõendiga Apps Scriptile, mis küsib Claude'ilt, mis münt see on
+    window.coinIdentify = u && coinAiUrl ? async (image) => {
+      const r = await fetch(coinAiUrl, { method: 'POST', body: JSON.stringify({ idToken: await u.getIdToken(), image }) });
+      return r.json();
+    } : null;
+    $('coin-photo-wrap').hidden = !window.coinIdentify;
     select.hidden = true;
     if (document.body.classList.contains('readonly')) {
       window.appState.setReadOnly(false);

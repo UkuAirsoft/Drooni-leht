@@ -356,7 +356,19 @@
     <!-- MÜNDID -->
     <section id="mundid" class="panel">
       <form id="coin-form" class="card">
-        <h2>Märgi münt kogusse</h2>
+        <div class="drone-head">
+          <h2>Märgi münt kogusse</h2>
+          <label class="button primary" id="coin-photo-wrap" hidden title="Pildista mündi riigipoolt">📷 Pildista münt
+            <input id="coin-photo" type="file" accept="image/*" capture="environment" hidden>
+          </label>
+        </div>
+        <div id="coin-ai" class="subform" hidden>
+          <div class="coin-ai-head">
+            <img id="coin-ai-photo" alt="Sinu foto">
+            <div id="coin-ai-text"></div>
+          </div>
+          <div id="coin-ai-list" class="coin-grid"></div>
+        </div>
         <div class="coin-pick">
           <div class="coin-pick-img">
             <img id="coin-preview" alt="" hidden>
