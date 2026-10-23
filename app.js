@@ -13,7 +13,7 @@ const PTYPES = { filament: 'Filament', ams: 'AMS', 'ams-ht': 'AMS HT', spool: 'K
 let state = load();
 
 function normalize(data) {
-  return { parts: [], drones: [], orders: [], recipes: {}, printers: [], filaments: [], log: [], ...data };
+  return { parts: [], drones: [], orders: [], recipes: {}, printers: [], filaments: [], coins: {}, log: [], ...data };
 }
 
 function load() {
@@ -1060,6 +1060,125 @@ $('fil-list').addEventListener('click', (e) => {
   }
 });
 
+/* ---------- Mündid ---------- */
+/* Kataloog (COIN_CATALOG) on failis mundid.js; kogu on state.coins: { mündi id: { qty, note, date } } */
+const DENOM_ORDER = ['c1', 'c2', 'c5', 'c10', 'c20', 'c50', 'e1', 'e2'];
+const DENOM_LABEL = { c1: '1 sent', c2: '2 senti', c5: '5 senti', c10: '10 senti', c20: '20 senti', c50: '50 senti', e1: '1 euro', e2: '2 eurot' };
+const DENOM_SEARCH = { c1: '1c 0,01', c2: '2c 0,02', c5: '5c 0,05', c10: '10c 0,10', c20: '20c 0,20', c50: '50c 0,50', e1: '1€ 1 €', e2: '2€ 2 €' };
+const COIN_PAGE = 120; // nii mitu münti näidatakse korraga, ülejäänud nupuga „Näita rohkem“
+const countryName = Object.fromEntries(COIN_COUNTRIES.map((c) => [c.cc, c.name]));
+const coinById = new Map(COIN_CATALOG.map((c) => [c.id, c]));
+const fold = (s) => String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); // otsing ilma täpitähtedeta
+let coinLimit = COIN_PAGE;
+
+const coinImg = (c) => COIN_IMG_BASE + encodeURI(c.img);
+const coinTitle = (c) => `${countryName[c.cc]} · ${DENOM_LABEL[c.d]}`;
+const shorten = (s, n) => (s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s);
+
+function coinSub(c) {
+  if (c.y) return `${c.y} mälestusmünt` + (c.v ? ` · ${c.v}. variant` : '') + (c.j ? ' · ühisemissioon' : '');
+  return c.s ? `${c.s}. seeria` + (c.sy ? ` (${c.sy})` : '') : 'Tavamünt';
+}
+
+const coinName = (c) => `${coinTitle(c)} (${coinSub(c)})`;
+const coinOption = (c) => (c.y
+  ? `${c.y} · ${shorten(c.f || 'mälestusmünt', 60)}${c.v ? ` (${c.v}. variant)` : ''}`
+  : DENOM_LABEL[c.d] + (c.s ? ` · ${c.s}. seeria${c.sy ? ` (${c.sy})` : ''}` : ''));
+
+// Riik, tavamündid nimiväärtuse ja seeria järgi, siis mälestusmündid aastate kaupa
+const sortedCoins = [...COIN_CATALOG].sort((a, b) =>
+  countryName[a.cc].localeCompare(countryName[b.cc], 'et')
+  || (a.y || 0) - (b.y || 0)
+  || DENOM_ORDER.indexOf(a.d) - DENOM_ORDER.indexOf(b.d)
+  || (a.s || 0) - (b.s || 0));
+for (const c of COIN_CATALOG) {
+  const en = COIN_COUNTRIES.find((x) => x.cc === c.cc).en;
+  c.hay = fold([countryName[c.cc], en, DENOM_LABEL[c.d], DENOM_SEARCH[c.d], coinSub(c), c.f, c.y ? 'mälestusmünt' : 'tavamünt'].join(' '));
+}
+
+function addCoin(c, qty, note) {
+  const own = state.coins[c.id];
+  if (!own) addLog('Münt kogusse', null, qty, null, coinName(c));
+  else if (qty !== own.qty) addLog('Muudetud', null, qty - own.qty, null, coinName(c));
+  state.coins[c.id] = { qty, note, date: own ? own.date : new Date().toISOString() };
+  save();
+}
+
+/* Vormis valitud münt: pilt, kas on juba olemas, kogus ja märkus */
+function showCoinPick(loadFields) {
+  const c = coinById.get($('coin-select').value);
+  const own = c && state.coins[c.id];
+  $('coin-preview').hidden = !c;
+  $('coin-preview-empty').hidden = !!c;
+  if (c && $('coin-preview').dataset.id !== c.id) {
+    $('coin-preview').src = coinImg(c);
+    $('coin-preview').alt = coinTitle(c);
+    $('coin-preview').dataset.id = c.id;
+  }
+  if (loadFields) {
+    $('coin-qty').value = own ? own.qty : 1;
+    $('coin-note').value = own ? own.note || '' : '';
+  }
+  $('coin-status').innerHTML = !c ? ''
+    : `<strong>${esc(coinTitle(c))}</strong> · ${esc(coinSub(c))}${c.f ? `<br>${esc(c.f)}` : ''}<br>`
+      + (own ? '<strong class="ok-text">✓ See münt on sul juba olemas</strong>' : 'Seda münti sul veel pole.');
+  $('coin-submit').textContent = own ? 'Salvesta' : 'Lisa kogusse';
+  $('coin-remove').hidden = !own;
+}
+
+function pickCoin(id) {
+  const c = coinById.get(id);
+  if (!c || readOnly) return;
+  $('coin-country').value = c.cc;
+  fillCoinSelect();
+  $('coin-select').value = c.id;
+  showCoinPick(true);
+  $('coin-form').scrollIntoView({ behavior: 'smooth' });
+}
+
+$('coin-country').addEventListener('change', () => {
+  fillCoinSelect();
+  showCoinPick(true);
+});
+$('coin-select').addEventListener('change', () => showCoinPick(true));
+
+$('coin-form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const c = coinById.get($('coin-select').value);
+  if (!c) return;
+  addCoin(c, Math.max(1, Math.round(parseFloat($('coin-qty').value) || 1)), $('coin-note').value.trim());
+});
+
+$('coin-remove').addEventListener('click', () => {
+  const c = coinById.get($('coin-select').value);
+  const own = c && state.coins[c.id];
+  if (!own || !confirm(`Eemaldada "${coinName(c)}" kogust?`)) return;
+  addLog('Münt eemaldatud kogust', null, own.qty, null, coinName(c));
+  delete state.coins[c.id];
+  save();
+  showCoinPick(true);
+});
+
+$('coin-grid').addEventListener('click', (e) => {
+  const tile = e.target.closest('[data-id]');
+  if (!tile) return;
+  const c = coinById.get(tile.dataset.id);
+  if (e.target.closest('button[data-act="add"]')) addCoin(c, 1, '');
+  else pickCoin(c.id);
+});
+
+for (const id of ['coin-search', 'coin-filter-country', 'coin-filter-type', 'coin-filter-have']) {
+  $(id).addEventListener('input', () => {
+    coinLimit = COIN_PAGE;
+    renderCoinGrid();
+  });
+}
+
+$('coin-more').addEventListener('click', () => {
+  coinLimit += COIN_PAGE;
+  renderCoinGrid();
+});
+
 /* ---------- Varukoopia ---------- */
 $('export-btn').addEventListener('click', () => {
   const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
@@ -1094,6 +1213,7 @@ function render() {
   renderOrders();
   renderBuild();
   renderPrinters();
+  renderCoins();
   renderLog();
 }
 
@@ -1396,6 +1516,80 @@ function renderMailbox() {
     </tr>${openMails.has(m.key) ? `
     <tr class="mail-body-row" data-key="${esc(m.key)}"><td colspan="7"><div class="mail-body">${esc(m.text) || '<span class="muted">Kirja sisu puudub. Käivita skriptis „loeUuesti“.</span>'}</div></td></tr>` : ''}`).join('');
   $('inbox-card').hidden = list.length === 0;
+}
+
+function renderCoins() {
+  // riikide valikus on näha, mitu selle riigi münti kogus on
+  const total = {}, have = {};
+  for (const c of COIN_CATALOG) {
+    total[c.cc] = (total[c.cc] || 0) + 1;
+    if (state.coins[c.id]) have[c.cc] = (have[c.cc] || 0) + 1;
+  }
+  const countries = [...COIN_COUNTRIES].sort((a, b) => a.name.localeCompare(b.name, 'et'));
+  const options = countries.map((c) => `<option value="${c.cc}">${esc(c.name)} (${have[c.cc] || 0}/${total[c.cc] || 0})</option>`).join('');
+  for (const [id, first] of [['coin-country', '— vali riik —'], ['coin-filter-country', 'Kõik riigid']]) {
+    const sel = $(id);
+    const current = sel.value;
+    sel.innerHTML = `<option value="">${first}</option>` + options;
+    sel.value = current;
+  }
+  fillCoinSelect();
+  showCoinPick(false);
+
+  const owned = COIN_CATALOG.filter((c) => state.coins[c.id]);
+  const pcs = owned.reduce((s, c) => s + state.coins[c.id].qty, 0);
+  const comm = owned.filter((c) => c.y).length;
+  const commAll = COIN_CATALOG.filter((c) => c.y).length;
+  $('coin-total').textContent = `Kogus ${owned.length} erinevat münti${pcs > owned.length ? ` (${pcs} tk)` : ''} kõigist ${COIN_CATALOG.length}-st`
+    + ` · tavamünte ${owned.length - comm}/${COIN_CATALOG.length - commAll} · mälestusmünte ${comm}/${commAll}`;
+  renderCoinGrid();
+}
+
+function fillCoinSelect() {
+  const cc = $('coin-country').value;
+  const sel = $('coin-select');
+  const current = sel.value;
+  const list = sortedCoins.filter((c) => c.cc === cc);
+  const opt = (c) => `<option value="${esc(c.id)}">${state.coins[c.id] ? '✓ ' : ''}${esc(coinOption(c))}</option>`;
+  sel.innerHTML = `<option value="">${cc ? '— vali münt —' : 'Vali enne riik'}</option>`
+    + (cc ? `<optgroup label="Tavamündid">${list.filter((c) => !c.y).map(opt).join('')}</optgroup>`
+      + `<optgroup label="2 € mälestusmündid">${list.filter((c) => c.y).map(opt).join('')}</optgroup>` : '');
+  sel.value = list.some((c) => c.id === current) ? current : '';
+  sel.disabled = !cc;
+}
+
+function renderCoinGrid() {
+  const words = fold($('coin-search').value).split(/\s+/).filter(Boolean);
+  const cc = $('coin-filter-country').value;
+  const type = $('coin-filter-type').value;
+  const have = $('coin-filter-have').value;
+  const list = sortedCoins.filter((c) => {
+    const own = state.coins[c.id];
+    if (cc && c.cc !== cc) return false;
+    if (type && (type === 'c') !== !!c.y) return false;
+    if (have && (have === 'have') !== !!own) return false;
+    const hay = own?.note ? c.hay + ' ' + fold(own.note) : c.hay;
+    return words.every((w) => hay.includes(w));
+  });
+  $('coin-grid').innerHTML = list.slice(0, coinLimit).map((c) => {
+    const own = state.coins[c.id];
+    return `
+    <div class="coin${own ? ' have' : ''}" data-id="${esc(c.id)}" title="${esc(own?.note || 'Vaata või muuda')}">
+      <img src="${esc(coinImg(c))}" alt="" loading="lazy">
+      <div class="coin-title">${esc(coinTitle(c))}</div>
+      <div class="coin-sub">${esc(coinSub(c))}</div>
+      ${c.f ? `<div class="coin-feature">${esc(c.f)}</div>` : ''}
+      <div class="coin-foot">${own
+        ? `<span class="coin-badge">✓ Olemas${own.qty > 1 ? ` · ${own.qty} tk` : ''}</span>`
+        : '<span class="coin-badge missing">Puudu</span><button type="button" class="small" data-act="add" title="Lisa kogusse">+ Lisa</button>'}</div>
+    </div>`;
+  }).join('');
+  const filtered = words.length || cc || type || have;
+  const found = list.filter((c) => state.coins[c.id]).length;
+  $('coin-found').textContent = filtered && list.length ? `Leitud ${list.length} münti, neist sul olemas ${found}` : '';
+  $('coin-empty').hidden = list.length > 0;
+  $('coin-more').hidden = list.length <= coinLimit;
+  $('coin-more').textContent = `Näita rohkem (veel ${list.length - coinLimit})`;
 }
 
 function renderLog() {

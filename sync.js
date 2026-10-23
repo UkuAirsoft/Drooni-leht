@@ -8,7 +8,7 @@ const SYNCED_KEY = 'drooni-ladu-synced-uid'; // kelle andmetega see seade on jub
 const OWN = 'own';
 const $ = (id) => document.getElementById(id);
 
-const hasData = (s) => s && (s.parts?.length || s.drones?.length || s.orders?.length);
+const hasData = (s) => s && (s.parts?.length || s.drones?.length || s.orders?.length || Object.keys(s.coins || {}).length);
 
 if (firebaseConfig && firebaseConfig.apiKey) start();
 

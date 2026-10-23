@@ -14,6 +14,7 @@
       <button class="tab" data-tab="tellitud">Tellitud <span id="order-count" class="badge"></span></button>
       <button class="tab" data-tab="droonid">Droonid</button>
       <button class="tab" data-tab="printer">3D printer</button>
+      <button class="tab" data-tab="mundid">Mündid</button>
       <button class="tab" data-tab="ajalugu">Ajalugu</button>
     </nav>
     <div class="sync">
@@ -352,6 +353,54 @@
       <datalist id="fil-brands"></datalist>
     </section>
 
+    <!-- MÜNDID -->
+    <section id="mundid" class="panel">
+      <form id="coin-form" class="card">
+        <h2>Märgi münt kogusse</h2>
+        <div class="coin-pick">
+          <div class="coin-pick-img">
+            <img id="coin-preview" alt="" hidden>
+            <span id="coin-preview-empty" class="muted">Vali riik ja münt</span>
+          </div>
+          <div class="grid">
+            <label>Riik <select id="coin-country" required></select></label>
+            <label>Münt <select id="coin-select" required></select></label>
+            <label>Mitu tükki <input id="coin-qty" type="number" min="1" step="1" value="1"></label>
+            <label>Märkus <input id="coin-note" placeholder="nt. aasta 2011, saadud Riiast"></label>
+          </div>
+        </div>
+        <p id="coin-status" class="muted"></p>
+        <div class="actions">
+          <button type="submit" class="primary" id="coin-submit">Lisa kogusse</button>
+          <button type="button" class="danger" id="coin-remove" hidden>Eemalda kogust</button>
+        </div>
+      </form>
+
+      <div class="card">
+        <h2>Otsi ja sirvi</h2>
+        <p id="coin-total" class="muted"></p>
+        <div class="toolbar">
+          <input id="coin-search" type="search" placeholder="Otsi münti… nt. Eesti 2 eurot, hunt, 2024">
+          <select id="coin-filter-country"></select>
+          <select id="coin-filter-type">
+            <option value="">Kõik mündid</option>
+            <option value="r">Tavamündid</option>
+            <option value="c">2 € mälestusmündid</option>
+          </select>
+          <select id="coin-filter-have">
+            <option value="">Olemas ja puudu</option>
+            <option value="have">Ainult olemas</option>
+            <option value="missing">Ainult puudu</option>
+          </select>
+        </div>
+        <p id="coin-found" class="muted"></p>
+        <div id="coin-grid" class="coin-grid"></div>
+        <p id="coin-empty" class="empty">Ühtegi münti ei leitud.</p>
+        <div class="actions"><button type="button" id="coin-more" hidden></button></div>
+        <p class="muted coin-source">Mündid ja pildid: <a href="https://www.ecb.europa.eu/euro/coins/html/index.et.html" target="_blank" rel="noopener noreferrer">Euroopa Keskpank</a></p>
+      </div>
+    </section>
+
     <!-- AJALUGU -->
     <section id="ajalugu" class="panel">
       <div class="card">
@@ -370,6 +419,7 @@
     <span class="hint">Andmed salvestatakse selle brauseri mällu ja sisse logides ka pilve.</span>
   </footer>
 
+  <script src="mundid.js"></script>
   <script src="app.js"></script>
   <script type="module" src="sync.js"></script>
 </body>

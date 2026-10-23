@@ -8,6 +8,7 @@
   --accent-text: #ffffff;
   --danger: #dc2626;
   --low: #fef3c7;
+  --ok: #15803d;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -20,6 +21,7 @@
     --accent: #3b82f6;
     --danger: #f87171;
     --low: #3b3216;
+    --ok: #3fb950;
   }
 }
 
@@ -207,3 +209,38 @@ body.readonly :is(#part-form, #build-card, #order-form, #inbox-card, #drone-form
 #order-printer-hint { margin: 8px 0 0; }
 body.readonly :is(#printer-form-card, #fil-form-card, .slot-load) { display: none !important; }
 body.readonly .slot-g input { pointer-events: none; border-color: transparent; background: transparent; }
+
+/* Mündid */
+.coin-pick { display: flex; gap: 16px; align-items: flex-start; }
+.coin-pick .grid { flex: 1; min-width: 0; }
+.coin-pick label { min-width: 0; }
+.coin-pick select { width: 100%; min-width: 0; } /* pikk mälestusmündi nimi ei veni kaardist välja */
+.coin-pick-img { width: 150px; height: 150px; flex: none; border-radius: 50%; border: 1px dashed var(--border); display: flex; align-items: center; justify-content: center; text-align: center; overflow: hidden; }
+.coin-pick-img img { width: 100%; height: 100%; object-fit: cover; }
+#coin-status:empty, #coin-found:empty { display: none; }
+#coin-status { margin: 12px 0 0; }
+#coin-total { margin: 0 0 8px; }
+#coin-found { margin: 0 0 8px; }
+.ok-text { color: var(--ok); }
+.coin-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.coin { border: 1px solid var(--border); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; align-items: center; gap: 3px; text-align: center; background: var(--bg); cursor: pointer; }
+.coin:hover { border-color: var(--accent); }
+.coin.have { border-color: var(--ok); }
+.coin img { width: 110px; height: 110px; border-radius: 50%; object-fit: cover; margin-bottom: 4px; background: var(--card); }
+.coin:not(.have) img { opacity: .55; filter: grayscale(.7); }
+.coin-title { font-weight: 600; font-size: .9rem; }
+.coin-sub { font-size: .78rem; color: var(--muted); }
+.coin-feature { font-size: .75rem; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.coin-foot { margin-top: auto; padding-top: 4px; display: flex; gap: 6px; align-items: center; }
+.coin-badge { font-size: .78rem; font-weight: 600; color: var(--ok); }
+.coin-badge.missing { color: var(--muted); font-weight: 400; }
+.coin-source { margin: 12px 0 0; }
+.coin-source a { color: var(--accent); }
+body.readonly #coin-form { display: none !important; }
+body.readonly .coin { cursor: default; }
+@media (max-width: 640px) {
+  .coin-pick { flex-direction: column; align-items: center; }
+  .coin-pick .grid { width: 100%; grid-template-columns: 1fr; }
+  .coin-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; }
+  .coin img { width: 90px; height: 90px; }
+}
